@@ -3,16 +3,15 @@ const GITHUB_API =
 const RELEASES_PAGE =
   'https://github.com/FISHSTICKSBOI1/SlipUpClipz/releases/latest'
 
-const EXCLUDED_SUFFIXES = ['.blockmap', '.yml', '.zip', '.tar.gz']
-
-function isInstallerAsset(name) {
-  const lower = name.toLowerCase()
-  if (!lower.endsWith('.exe')) return false
-  if (!lower.includes('slipupclipz')) return false
-  if (!lower.includes('setup')) return false
-  if (lower.includes('__uninstaller')) return false
-  if (EXCLUDED_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return false
-  return true
+function isPreferredWindowsInstaller(name) {
+  const lower = String(name).toLowerCase()
+  return (
+    lower.endsWith('.exe') &&
+    !lower.endsWith('.blockmap') &&
+    !lower.includes('__uninstaller') &&
+    lower.includes('slipupclipz') &&
+    lower.includes('setup')
+  )
 }
 
 export async function handler() {
@@ -35,7 +34,8 @@ export async function handler() {
     }
 
     const release = await response.json()
-    const installer = release.assets?.find((asset) => isInstallerAsset(asset.name))
+    const assets = Array.isArray(release.assets) ? release.assets : []
+    const installer = assets.find((asset) => isPreferredWindowsInstaller(asset?.name))
 
     if (!installer?.browser_download_url) {
       return {

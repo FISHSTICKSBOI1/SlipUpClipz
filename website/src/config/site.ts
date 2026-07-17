@@ -5,7 +5,7 @@ export const SITE = {
   name: 'SlipUpClipz',
   tagline: 'Capture what they just said. Replay it instantly.',
   websiteUrl: 'https://slipupclipz.com',
-  downloadUrl: '/download/latest',
+  downloadUrl: '/.netlify/functions/download-latest',
   releasesUrl: 'https://github.com/FISHSTICKSBOI1/SlipUpClipz/releases/latest',
   currentVersion: '0.1.4',
   installerSizeLabel: '~82.4 MB',
