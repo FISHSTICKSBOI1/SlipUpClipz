@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Clips page">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0e16"/>
+      <stop offset="100%" stop-color="#141826"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c5cff"/>
+      <stop offset="100%" stop-color="#e879f9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" rx="28" fill="url(#bg)"/>
+  <rect x="24" y="24" width="1232" height="672" rx="22" fill="#10131c" stroke="#2a3148"/>
+  <circle cx="56" cy="56" r="7" fill="#fb7185"/>
+  <circle cx="80" cy="56" r="7" fill="#fcd34d"/>
+  <circle cx="104" cy="56" r="7" fill="#34d399"/>
+  <text x="130" y="62" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="18">SlipUpClipz · Clips page</text>
+  <rect x="48" y="96" width="280" height="520" rx="16" fill="#161a27" stroke="#2a3148"/>
+    <text x="72" y="140" fill="#e2e8f0" font-size="22" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Clips</text>
+    <rect x="72" y="168" width="220" height="44" rx="10" fill="#1c2233"/>
+    <rect x="72" y="232" width="220" height="70" rx="12" fill="#1c2233" stroke="#7c5cff55"/>
+    <rect x="72" y="318" width="220" height="70" rx="12" fill="#1c2233"/>
+    <rect x="72" y="404" width="220" height="70" rx="12" fill="#1c2233"/>
+    <rect x="360" y="96" width="848" height="240" rx="16" fill="#161a27" stroke="#2a3148"/>
+    <text x="392" y="140" fill="#94a3b8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Replay buffer</text>
+    <rect x="392.0" y="272.0" width="13.3" height="18" rx="2" fill="#334155"/><rect x="408.3" y="255.0" width="13.3" height="35" rx="2" fill="#334155"/><rect x="424.5" y="238.0" width="13.3" height="52" rx="2" fill="#334155"/><rect x="440.8" y="221.0" width="13.3" height="69" rx="2" fill="#334155"/><rect x="457.0" y="204.0" width="13.3" height="86" rx="2" fill="#334155"/><rect x="473.3" y="187.0" width="13.3" height="103" rx="2" fill="#334155"/><rect x="489.5" y="266.0" width="13.3" height="24" rx="2" fill="#334155"/><rect x="505.8" y="249.0" width="13.3" height="41" rx="2" fill="#334155"/><rect x="522.0" y="232.0" width="13.3" height="58" rx="2" fill="#334155"/><rect x="538.3" y="215.0" width="13.3" height="75" rx="2" fill="#334155"/><rect x="554.5" y="198.0" width="13.3" height="92" rx="2" fill="#334155"/><rect x="570.8" y="181.0" width="13.3" height="109" rx="2" fill="#334155"/><rect x="587.0" y="260.0" width="13.3" height="30" rx="2" fill="url(#accent)"/><rect x="603.3" y="243.0" width="13.3" height="47" rx="2" fill="url(#accent)"/><rect x="619.5" y="226.0" width="13.3" height="64" rx="2" fill="url(#accent)"/><rect x="635.8" y="209.0" width="13.3" height="81" rx="2" fill="url(#accent)"/><rect x="652.0" y="192.0" width="13.3" height="98" rx="2" fill="url(#accent)"/><rect x="668.3" y="271.0" width="13.3" height="19" rx="2" fill="url(#accent)"/><rect x="684.5" y="254.0" width="13.3" height="36" rx="2" fill="url(#accent)"/><rect x="700.8" y="237.0" width="13.3" height="53" rx="2" fill="url(#accent)"/><rect x="717.0" y="220.0" width="13.3" height="70" rx="2" fill="url(#accent)"/><rect x="733.3" y="203.0" width="13.3" height="87" rx="2" fill="url(#accent)"/><rect x="749.5" y="186.0" width="13.3" height="104" rx="2" fill="url(#accent)"/><rect x="765.8" y="265.0" width="13.3" height="25" rx="2" fill="url(#accent)"/><rect x="782.0" y="248.0" width="13.3" height="42" rx="2" fill="url(#accent)"/><rect x="798.3" y="231.0" width="13.3" height="59" rx="2" fill="url(#accent)"/><rect x="814.5" y="214.0" width="13.3" height="76" rx="2" fill="url(#accent)"/><rect x="830.8" y="197.0" width="13.3" height="93" rx="2" fill="url(#accent)"/><rect x="847.0" y="180.0" width="13.3" height="110" rx="2" fill="url(#accent)"/><rect x="863.3" y="259.0" width="13.3" height="31" rx="2" fill="url(#accent)"/><rect x="879.5" y="242.0" width="13.3" height="48" rx="2" fill="url(#accent)"/><rect x="895.8" y="225.0" width="13.3" height="65" rx="2" fill="url(#accent)"/><rect x="912.0" y="208.0" width="13.3" height="82" rx="2" fill="url(#accent)"/><rect x="928.3" y="191.0" width="13.3" height="99" rx="2" fill="#334155"/><rect x="944.5" y="270.0" width="13.3" height="20" rx="2" fill="#334155"/><rect x="960.8" y="253.0" width="13.3" height="37" rx="2" fill="#334155"/><rect x="977.0" y="236.0" width="13.3" height="54" rx="2" fill="#334155"/><rect x="993.3" y="219.0" width="13.3" height="71" rx="2" fill="#334155"/><rect x="1009.5" y="202.0" width="13.3" height="88" rx="2" fill="#334155"/><rect x="1025.8" y="185.0" width="13.3" height="105" rx="2" fill="#334155"/><rect x="1042.0" y="264.0" width="13.3" height="26" rx="2" fill="#334155"/><rect x="1058.3" y="247.0" width="13.3" height="43" rx="2" fill="#334155"/><rect x="1074.5" y="230.0" width="13.3" height="60" rx="2" fill="#334155"/><rect x="1090.8" y="213.0" width="13.3" height="77" rx="2" fill="#334155"/><rect x="1107.0" y="196.0" width="13.3" height="94" rx="2" fill="#334155"/><rect x="1123.3" y="179.0" width="13.3" height="111" rx="2" fill="#334155"/><rect x="1139.5" y="258.0" width="13.3" height="32" rx="2" fill="#334155"/><rect x="1155.8" y="241.0" width="13.3" height="49" rx="2" fill="#334155"/>
+    <rect x="360" y="360" width="848" height="256" rx="16" fill="#161a27" stroke="#2a3148"/>
+    <text x="392" y="404" fill="#94a3b8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Clip library</text>
+    <rect x="392" y="430" width="240" height="140" rx="14" fill="#1c2233"/>
+    <rect x="656" y="430" width="240" height="140" rx="14" fill="#1c2233"/>
+    <rect x="920" y="430" width="240" height="140" rx="14" fill="#1c2233"/>
+</svg>

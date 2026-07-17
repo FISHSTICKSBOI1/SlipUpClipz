@@ -1,0 +1,113 @@
+{
+  "name": "slipupclipz",
+  "version": "0.1.4",
+  "description": "SlipUpClipz desktop soundboard and instant replay clip studio",
+  "author": "SlipUpClipz",
+  "main": "dist-electron/main.js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "release:clean": "node scripts/clean-release.mjs",
+    "preflight:release": "node scripts/preflight-release.mjs",
+    "verify:release": "node scripts/verify-release.mjs",
+    "package": "npm run build && electron-builder --win --publish never",
+    "package:dir": "npm run build && electron-builder --win --dir",
+    "release": "npm run preflight:release && npm run release:clean && npm run build && electron-builder --win --publish always && npm run verify:release",
+    "license:demo": "node scripts/generate-license.mjs",
+    "test:license": "npx tsx --test electron/licenseLogic.test.ts",
+    "website:dev": "vite --config website/vite.config.ts",
+    "website:build": "node scripts/build-website.mjs",
+    "website:preview": "vite preview --config website/vite.config.ts",
+    "website:netlify-dev": "npx netlify dev"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.9",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.3",
+    "stripe": "^17.7.0",
+    "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "autoprefixer": "^10.4.21",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.15.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.slipupclipz.app",
+    "productName": "SlipUpClipz",
+    "copyright": "Copyright © 2026 SlipUpClipz",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "build/tray-icon.png",
+        "to": "tray-icon.png"
+      },
+      {
+        "from": "build/icon-16.png",
+        "to": "icon-16.png"
+      },
+      {
+        "from": "build/icon-32.png",
+        "to": "icon-32.png"
+      },
+      {
+        "from": "build/icon-64.png",
+        "to": "icon-64.png"
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "FISHSTICKSBOI1",
+      "repo": "SlipUpClipz",
+      "releaseType": "release"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SlipUpClipz",
+      "artifactName": "${productName} Setup ${version}.${ext}",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    }
+  }
+}

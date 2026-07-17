@@ -1,0 +1,464 @@
+{
+  "version": "0.1.4",
+  "supportEmail": "slipupclipz@gmail.com",
+  "helpCenterPath": "/help",
+  "contactPath": "/contact",
+  "websiteUrl": "https://slipupclipz.com",
+  "categories": [
+    {
+      "id": "getting-started",
+      "title": "Getting started",
+      "description": "Install, tour, mic, replay source, and Clip hotkey."
+    },
+    {
+      "id": "clipping",
+      "title": "Clipping problems",
+      "description": "Empty clips, decode errors, and capture source issues."
+    },
+    {
+      "id": "soundboard",
+      "title": "Soundboard problems",
+      "description": "Playback, hotkeys, imports, Stop All, and pad volume."
+    },
+    {
+      "id": "discord",
+      "title": "Discord and game setup",
+      "description": "VB-Cable, virtual mic selection, mixing, and echo."
+    },
+    {
+      "id": "voice-effects",
+      "title": "Voice effects",
+      "description": "Presets, pitch, bass, and monitoring."
+    },
+    {
+      "id": "updates",
+      "title": "Updates and licensing",
+      "description": "Auto-updates, Pro activation, and moving PCs."
+    }
+  ],
+  "articles": [
+    {
+      "slug": "installing-slipupclipz",
+      "category": "getting-started",
+      "title": "Installing SlipUpClipz",
+      "summary": "Download the Windows installer and complete setup.",
+      "steps": [
+        "Download the latest SlipUpClipz Setup installer from the Download page or GitHub Releases.",
+        "Run the .exe. If SmartScreen appears, choose More info → Run anyway when you trust the source.",
+        "Follow the NSIS installer prompts and finish installation.",
+        "Launch SlipUpClipz from the Start Menu or desktop shortcut."
+      ]
+    },
+    {
+      "slug": "first-time-guided-tour",
+      "category": "getting-started",
+      "title": "First-time guided tour",
+      "summary": "Walk through the in-app tour after your first launch.",
+      "steps": [
+        "Open SlipUpClipz for the first time.",
+        "Follow the guided highlights for Clips, Soundboard, and Settings.",
+        "You can restart the tour later from Settings → Help & Support."
+      ]
+    },
+    {
+      "slug": "choosing-your-microphone",
+      "category": "getting-started",
+      "title": "Choosing your microphone",
+      "summary": "Pick the physical mic SlipUpClipz should listen to.",
+      "steps": [
+        "Open Settings or the audio controls in Soundboard.",
+        "Select your real microphone device (not the virtual cable).",
+        "Speak briefly and confirm input levels move."
+      ]
+    },
+    {
+      "slug": "choosing-replay-audio-source",
+      "category": "getting-started",
+      "title": "Choosing replay audio source",
+      "summary": "Decide what the rolling buffer records.",
+      "steps": [
+        "Open the Clips page.",
+        "Find Replay audio source next to the recorder.",
+        "Choose microphone, system/game audio, or the combination your setup supports.",
+        "Start the buffer and test a short clip."
+      ]
+    },
+    {
+      "slug": "setting-the-clip-hotkey",
+      "category": "getting-started",
+      "title": "Setting the Clip hotkey",
+      "summary": "Bind a global or in-app shortcut to capture the buffer.",
+      "steps": [
+        "Open the Clips page.",
+        "Click the Clip hotkey control and press your preferred keys.",
+        "Confirm the new binding is shown.",
+        "With the buffer listening, press the hotkey to capture a clip."
+      ]
+    },
+    {
+      "slug": "clip-button-does-nothing",
+      "category": "clipping",
+      "title": "Clip button does nothing",
+      "summary": "Fix a Clip action that never creates a clip.",
+      "steps": [
+        "Confirm the replay buffer status shows it is listening.",
+        "Check that a microphone or system source is selected.",
+        "Try the on-screen Clip control as well as the hotkey.",
+        "Restart SlipUpClipz and test again with a short spoken phrase."
+      ],
+      "tips": [
+        "If the buffer was just started, wait a second so there is audio to capture."
+      ]
+    },
+    {
+      "slug": "clip-has-no-audio",
+      "category": "clipping",
+      "title": "Clip has no audio",
+      "summary": "Clips save but play back silent.",
+      "steps": [
+        "Verify Windows privacy settings allow microphone access.",
+        "Make sure the correct input device is selected in SlipUpClipz.",
+        "If capturing system audio, confirm that source is producing sound.",
+        "Re-record a test clip while watching input meters."
+      ]
+    },
+    {
+      "slug": "could-not-decode-clip",
+      "category": "clipping",
+      "title": "Could not decode clip for editing",
+      "summary": "The trimmer cannot open a captured or imported file.",
+      "steps": [
+        "Try capturing a fresh clip instead of an older file.",
+        "For imports, use a standard MP3 or WAV file.",
+        "Close other apps that might lock the audio file.",
+        "Restart SlipUpClipz and open the clip again."
+      ]
+    },
+    {
+      "slug": "wrong-microphone-selected",
+      "category": "clipping",
+      "title": "Wrong microphone selected",
+      "summary": "Audio is coming from an unexpected device.",
+      "steps": [
+        "Open audio device settings in SlipUpClipz.",
+        "Select your headset or desk mic by name.",
+        "Avoid selecting VB-Cable as the capture mic unless you intend to.",
+        "Test with Hear Myself or a short clip."
+      ]
+    },
+    {
+      "slug": "system-audio-not-captured",
+      "category": "clipping",
+      "title": "System audio is not captured",
+      "summary": "Game or Discord output never appears in clips.",
+      "steps": [
+        "Set the replay source to include system/loopback audio if available.",
+        "Play known audio (music or a Discord call) while the buffer listens.",
+        "On some setups you may need exclusive-mode off in Windows sound settings.",
+        "If loopback is unsupported, capture mic-only or use a virtual cable mix."
+      ]
+    },
+    {
+      "slug": "soundboard-cannot-be-heard",
+      "category": "soundboard",
+      "title": "Soundboard cannot be heard",
+      "summary": "Pads trigger but you or Discord hear nothing.",
+      "steps": [
+        "Check the output device in Settings / Soundboard mixer.",
+        "Raise pad volume and master output.",
+        "If routing to Discord, select the virtual cable in both SlipUpClipz and Discord.",
+        "Use Hear Myself to confirm local monitoring."
+      ]
+    },
+    {
+      "slug": "hotkey-does-not-work",
+      "category": "soundboard",
+      "title": "Hotkey does not work",
+      "summary": "Keyboard shortcuts do not fire pads or Clip.",
+      "steps": [
+        "Confirm the hotkey is assigned on the pad or Clip control.",
+        "Free plan supports in-app hotkeys while SlipUpClipz is focused.",
+        "Pro global hotkeys must be enabled in Settings.",
+        "Avoid conflicting shortcuts used by your game or Discord."
+      ]
+    },
+    {
+      "slug": "imported-mp3-wav-will-not-play",
+      "category": "soundboard",
+      "title": "Imported MP3 or WAV will not play",
+      "summary": "Imports appear on pads but fail playback.",
+      "steps": [
+        "Re-import a known-good MP3 or WAV under a few megabytes.",
+        "Avoid DRM-protected or unusual codecs.",
+        "Check pad volume is not muted.",
+        "Try Stop All Sounds, then trigger the pad again."
+      ]
+    },
+    {
+      "slug": "stop-all-sounds",
+      "category": "soundboard",
+      "title": "Stop All Sounds",
+      "summary": "Immediately silence every playing pad.",
+      "steps": [
+        "Click Stop All Sounds on the Soundboard page, or use the Stop All hotkey if assigned.",
+        "Confirm playing indicators clear on each pad.",
+        "Trigger a single pad again to verify playback still works."
+      ]
+    },
+    {
+      "slug": "adjusting-pad-volume",
+      "category": "soundboard",
+      "title": "Adjusting pad volume",
+      "summary": "Balance loud clips without changing your mic.",
+      "steps": [
+        "Open the pad controls for the sound you want to change.",
+        "Move the per-pad volume slider.",
+        "Preview the pad and adjust until it sits under your voice."
+      ]
+    },
+    {
+      "slug": "installing-vb-audio-virtual-cable",
+      "category": "discord",
+      "title": "Installing VB-Audio Virtual Cable",
+      "summary": "Add a virtual device for Discord and game voice routing.",
+      "steps": [
+        "Download VB-Audio Virtual Cable from the official VB-Audio site.",
+        "Install it and reboot if Windows asks you to.",
+        "Confirm “CABLE Input” and “CABLE Output” appear in Windows sound devices."
+      ]
+    },
+    {
+      "slug": "selecting-virtual-device-in-slipupclipz",
+      "category": "discord",
+      "title": "Selecting the virtual device in SlipUpClipz",
+      "summary": "Send mic + soundboard into the cable.",
+      "steps": [
+        "Open audio output / routing settings in SlipUpClipz.",
+        "Choose VB-Cable (or your virtual device) as the routed output.",
+        "Enable the mix so microphone and pads both feed the virtual device."
+      ]
+    },
+    {
+      "slug": "selecting-virtual-microphone-in-discord",
+      "category": "discord",
+      "title": "Selecting the virtual microphone in Discord",
+      "summary": "Point Discord at the cable so friends hear your mix.",
+      "steps": [
+        "Open Discord → User Settings → Voice & Video.",
+        "Set Input Device to CABLE Output (VB-Audio Virtual Cable).",
+        "Speak and play a pad while watching Discord’s input meter."
+      ]
+    },
+    {
+      "slug": "mixing-live-mic-and-soundboard",
+      "category": "discord",
+      "title": "Mixing live microphone and soundboard",
+      "summary": "Keep talking while pads play into the same virtual mic.",
+      "steps": [
+        "Confirm your real mic is selected as the SlipUpClipz input.",
+        "Confirm the virtual cable is the routed output.",
+        "Balance pad volumes so clips do not overpower your voice.",
+        "Test in a private Discord call before ranked games."
+      ]
+    },
+    {
+      "slug": "using-hear-myself",
+      "category": "discord",
+      "title": "Using Hear Myself",
+      "summary": "Monitor your processed voice and pads locally.",
+      "steps": [
+        "Enable Hear Myself in Soundboard controls.",
+        "Wear headphones to avoid speaker feedback.",
+        "Adjust monitoring level until it is comfortable."
+      ]
+    },
+    {
+      "slug": "troubleshooting-echo-or-doubled-audio",
+      "category": "discord",
+      "title": "Troubleshooting echo or doubled audio",
+      "summary": "Stop hearing yourself twice in Discord or locally.",
+      "steps": [
+        "Use headphones instead of open speakers.",
+        "Disable Discord’s input monitoring if you already use Hear Myself.",
+        "Make sure Discord is not also capturing your real mic in parallel.",
+        "Turn off extra monitoring paths in Windows “Listen to this device”."
+      ]
+    },
+    {
+      "slug": "enabling-voice-effects",
+      "category": "voice-effects",
+      "title": "Enabling effects",
+      "summary": "Turn on real-time voice processing.",
+      "steps": [
+        "Open Voice Effects on the Soundboard page.",
+        "Enable effects.",
+        "Speak while monitoring to confirm the change."
+      ]
+    },
+    {
+      "slug": "adjusting-pitch-and-bass",
+      "category": "voice-effects",
+      "title": "Adjusting pitch and bass",
+      "summary": "Fine-tune how processed your voice sounds.",
+      "steps": [
+        "Move pitch up or down in small steps.",
+        "Adjust bass for warmth or thinness.",
+        "Use Hear Myself to evaluate before joining a call."
+      ]
+    },
+    {
+      "slug": "using-voice-presets",
+      "category": "voice-effects",
+      "title": "Using presets",
+      "summary": "Apply Deep, Squeaky, Radio, or Robot quickly.",
+      "steps": [
+        "Choose a preset such as Deep, Squeaky, Radio, or Robot.",
+        "Preview with Hear Myself.",
+        "Switch back to Normal when you want your regular voice."
+      ]
+    },
+    {
+      "slug": "reducing-delay-or-distortion",
+      "category": "voice-effects",
+      "title": "Reducing delay or distortion",
+      "summary": "Keep effects usable in live chat.",
+      "steps": [
+        "Avoid extreme pitch values during competitive play.",
+        "Close unused audio apps competing for the device.",
+        "Disable effects temporarily to compare latency.",
+        "Update your audio drivers if distortion persists."
+      ]
+    },
+    {
+      "slug": "checking-for-updates",
+      "category": "updates",
+      "title": "Checking for updates",
+      "summary": "See if a newer SlipUpClipz build is available.",
+      "steps": [
+        "Open Settings → Updates.",
+        "Click Check for Updates.",
+        "If an update exists, wait for the download to finish."
+      ]
+    },
+    {
+      "slug": "restarting-to-install",
+      "category": "updates",
+      "title": "Restarting to install",
+      "summary": "Apply a downloaded update safely.",
+      "steps": [
+        "When prompted that an update is ready, choose Restart Now.",
+        "Or choose Later and use Restart and Install in Settings when you are not mid-game.",
+        "After relaunch, confirm the version number in Settings."
+      ]
+    },
+    {
+      "slug": "activating-pro",
+      "category": "updates",
+      "title": "Activating Pro",
+      "summary": "Unlock Pro features with your license key.",
+      "steps": [
+        "Open Settings and find the License section.",
+        "Paste your Pro license key.",
+        "Activate and confirm Pro features unlock (pads, global hotkeys, routing)."
+      ]
+    },
+    {
+      "slug": "moving-to-another-computer",
+      "category": "updates",
+      "title": "Moving to another computer",
+      "summary": "Install SlipUpClipz elsewhere and restore Pro.",
+      "steps": [
+        "Install SlipUpClipz on the new PC from the official download.",
+        "Sign in / activate with the same Pro key when prompted.",
+        "Reconfigure devices and hotkeys on the new machine.",
+        "Contact support if activation fails after a hardware move."
+      ]
+    },
+    {
+      "slug": "restoring-access",
+      "category": "updates",
+      "title": "Restoring access",
+      "summary": "Recover Pro when a key or purchase receipt is missing.",
+      "steps": [
+        "Search your email for the original purchase or license message.",
+        "Try activating again from Settings → License.",
+        "Contact Support with your purchase email and approximate order date."
+      ]
+    }
+  ],
+  "faq": [
+    {
+      "question": "What does SlipUpClipz record?",
+      "answer": "SlipUpClipz keeps a short rolling replay buffer of the audio sources you select — typically microphone, game, Discord, or system audio depending on your setup. It captures recent audio for clipping, not long continuous recordings by default."
+    },
+    {
+      "question": "Can it capture Discord audio?",
+      "answer": "Yes, when your replay source includes system or application audio and Windows routing is set up correctly. Many players also use VB-Audio Virtual Cable so Discord voice can be mixed with the soundboard."
+    },
+    {
+      "question": "Can it capture game audio?",
+      "answer": "Yes, when system/loopback capture is available and selected as the replay source. Exact behavior can vary by Windows audio settings and how the game outputs sound."
+    },
+    {
+      "question": "Does it record video?",
+      "answer": "No. SlipUpClipz is audio-focused: replay clipping, trimming, soundboard playback, and virtual microphone routing."
+    },
+    {
+      "question": "Does it work with Valorant, CS2, Fortnite, and Discord?",
+      "answer": "SlipUpClipz is built for Windows gaming and Discord voice chat. Compatibility depends on your audio routing (system capture and/or a virtual cable). Always follow each game’s and Discord’s device settings."
+    },
+    {
+      "question": "Do I need VB-Audio Virtual Cable?",
+      "answer": "Not for basic clipping and local playback. You typically need a virtual audio device like VB-Audio Virtual Cable if you want Discord or games to hear your microphone and soundboard together."
+    },
+    {
+      "question": "Can people hear my microphone and soundboard together?",
+      "answer": "Yes, when virtual microphone routing is configured: SlipUpClipz sends your mic and pads to a virtual device, and Discord (or another app) uses that virtual device as its input."
+    },
+    {
+      "question": "Can I import MP3 and WAV files?",
+      "answer": "Yes. You can import MP3 and WAV files into the soundboard in addition to clips you capture with the replay buffer."
+    },
+    {
+      "question": "Does it work in the background?",
+      "answer": "Yes. The replay buffer can keep running while you game. Pro unlocks global hotkeys, minimize-to-tray behavior, and launch on startup for background use."
+    },
+    {
+      "question": "Will it affect game performance?",
+      "answer": "SlipUpClipz is designed to stay lightweight while buffering recent audio. Impact varies by PC, but it does not record video and avoids heavy background work. Close unused audio apps if you notice contention."
+    },
+    {
+      "question": "Is Pro a subscription?",
+      "answer": "Yes. SlipUpClipz Pro is $4.99 USD per year with automatic yearly renewal. You keep the same license key across renewals. Cancel anytime from your Stripe billing portal link in the license email."
+    },
+    {
+      "question": "How do automatic updates work?",
+      "answer": "Installed builds can check GitHub Releases for a newer version, download it in the background, and ask you to restart to install. You can also check manually in Settings → Updates."
+    },
+    {
+      "question": "Where are clips stored?",
+      "answer": "Clips and related library data are stored locally on your computer. SlipUpClipz does not upload your recordings by default."
+    },
+    {
+      "question": "Why might Windows show a SmartScreen warning?",
+      "answer": "New or unsigned apps often trigger Windows SmartScreen. If you downloaded SlipUpClipz from the official GitHub Releases or website download link, you can choose More info → Run anyway. Code signing will reduce these warnings once a certificate is in place."
+    }
+  ],
+  "recentChangelogHighlights": [
+    "Redesigned Discord/Voicemod-inspired desktop interface",
+    "Improved waveform visibility",
+    "Moving waveform preview playhead",
+    "Movable trim selection",
+    "Improved voice effects",
+    "Green Clip button",
+    "Improved onboarding positioning",
+    "Rotating Quick Tips",
+    "Official S branding",
+    "50 Pro soundboard pads",
+    "F11 fullscreen",
+    "Single-instance and tray fixes",
+    "Help Center integration",
+    "Stability fixes"
+  ],
+  "context": "SlipUpClipz current public version: 0.1.4\nSupport email: slipupclipz@gmail.com\nHelp Center path: /help\nContact path: /contact\n\n=== Help Center categories ===\n- Getting started: Install, tour, mic, replay source, and Clip hotkey.\n- Clipping problems: Empty clips, decode errors, and capture source issues.\n- Soundboard problems: Playback, hotkeys, imports, Stop All, and pad volume.\n- Discord and game setup: VB-Cable, virtual mic selection, mixing, and echo.\n- Voice effects: Presets, pitch, bass, and monitoring.\n- Updates and licensing: Auto-updates, Pro activation, and moving PCs.\n\n=== Help Center articles ===\n## Installing SlipUpClipz (installing-slipupclipz)\nDownload the Windows installer and complete setup.\n1. Download the latest SlipUpClipz Setup installer from the Download page or GitHub Releases.\n2. Run the .exe. If SmartScreen appears, choose More info → Run anyway when you trust the source.\n3. Follow the NSIS installer prompts and finish installation.\n4. Launch SlipUpClipz from the Start Menu or desktop shortcut.\n\n## First-time guided tour (first-time-guided-tour)\nWalk through the in-app tour after your first launch.\n1. Open SlipUpClipz for the first time.\n2. Follow the guided highlights for Clips, Soundboard, and Settings.\n3. You can restart the tour later from Settings → Help & Support.\n\n## Choosing your microphone (choosing-your-microphone)\nPick the physical mic SlipUpClipz should listen to.\n1. Open Settings or the audio controls in Soundboard.\n2. Select your real microphone device (not the virtual cable).\n3. Speak briefly and confirm input levels move.\n\n## Choosing replay audio source (choosing-replay-audio-source)\nDecide what the rolling buffer records.\n1. Open the Clips page.\n2. Find Replay audio source next to the recorder.\n3. Choose microphone, system/game audio, or the combination your setup supports.\n4. Start the buffer and test a short clip.\n\n## Setting the Clip hotkey (setting-the-clip-hotkey)\nBind a global or in-app shortcut to capture the buffer.\n1. Open the Clips page.\n2. Click the Clip hotkey control and press your preferred keys.\n3. Confirm the new binding is shown.\n4. With the buffer listening, press the hotkey to capture a clip.\n\n## Clip button does nothing (clip-button-does-nothing)\nFix a Clip action that never creates a clip.\n1. Confirm the replay buffer status shows it is listening.\n2. Check that a microphone or system source is selected.\n3. Try the on-screen Clip control as well as the hotkey.\n4. Restart SlipUpClipz and test again with a short spoken phrase.\nTips: If the buffer was just started, wait a second so there is audio to capture.\n\n## Clip has no audio (clip-has-no-audio)\nClips save but play back silent.\n1. Verify Windows privacy settings allow microphone access.\n2. Make sure the correct input device is selected in SlipUpClipz.\n3. If capturing system audio, confirm that source is producing sound.\n4. Re-record a test clip while watching input meters.\n\n## Could not decode clip for editing (could-not-decode-clip)\nThe trimmer cannot open a captured or imported file.\n1. Try capturing a fresh clip instead of an older file.\n2. For imports, use a standard MP3 or WAV file.\n3. Close other apps that might lock the audio file.\n4. Restart SlipUpClipz and open the clip again.\n\n## Wrong microphone selected (wrong-microphone-selected)\nAudio is coming from an unexpected device.\n1. Open audio device settings in SlipUpClipz.\n2. Select your headset or desk mic by name.\n3. Avoid selecting VB-Cable as the capture mic unless you intend to.\n4. Test with Hear Myself or a short clip.\n\n## System audio is not captured (system-audio-not-captured)\nGame or Discord output never appears in clips.\n1. Set the replay source to include system/loopback audio if available.\n2. Play known audio (music or a Discord call) while the buffer listens.\n3. On some setups you may need exclusive-mode off in Windows sound settings.\n4. If loopback is unsupported, capture mic-only or use a virtual cable mix.\n\n## Soundboard cannot be heard (soundboard-cannot-be-heard)\nPads trigger but you or Discord hear nothing.\n1. Check the output device in Settings / Soundboard mixer.\n2. Raise pad volume and master output.\n3. If routing to Discord, select the virtual cable in both SlipUpClipz and Discord.\n4. Use Hear Myself to confirm local monitoring.\n\n## Hotkey does not work (hotkey-does-not-work)\nKeyboard shortcuts do not fire pads or Clip.\n1. Confirm the hotkey is assigned on the pad or Clip control.\n2. Free plan supports in-app hotkeys while SlipUpClipz is focused.\n3. Pro global hotkeys must be enabled in Settings.\n4. Avoid conflicting shortcuts used by your game or Discord.\n\n## Imported MP3 or WAV will not play (imported-mp3-wav-will-not-play)\nImports appear on pads but fail playback.\n1. Re-import a known-good MP3 or WAV under a few megabytes.\n2. Avoid DRM-protected or unusual codecs.\n3. Check pad volume is not muted.\n4. Try Stop All Sounds, then trigger the pad again.\n\n## Stop All Sounds (stop-all-sounds)\nImmediately silence every playing pad.\n1. Click Stop All Sounds on the Soundboard page, or use the Stop All hotkey if assigned.\n2. Confirm playing indicators clear on each pad.\n3. Trigger a single pad again to verify playback still works.\n\n## Adjusting pad volume (adjusting-pad-volume)\nBalance loud clips without changing your mic.\n1. Open the pad controls for the sound you want to change.\n2. Move the per-pad volume slider.\n3. Preview the pad and adjust until it sits under your voice.\n\n## Installing VB-Audio Virtual Cable (installing-vb-audio-virtual-cable)\nAdd a virtual device for Discord and game voice routing.\n1. Download VB-Audio Virtual Cable from the official VB-Audio site.\n2. Install it and reboot if Windows asks you to.\n3. Confirm “CABLE Input” and “CABLE Output” appear in Windows sound devices.\n\n## Selecting the virtual device in SlipUpClipz (selecting-virtual-device-in-slipupclipz)\nSend mic + soundboard into the cable.\n1. Open audio output / routing settings in SlipUpClipz.\n2. Choose VB-Cable (or your virtual device) as the routed output.\n3. Enable the mix so microphone and pads both feed the virtual device.\n\n## Selecting the virtual microphone in Discord (selecting-virtual-microphone-in-discord)\nPoint Discord at the cable so friends hear your mix.\n1. Open Discord → User Settings → Voice & Video.\n2. Set Input Device to CABLE Output (VB-Audio Virtual Cable).\n3. Speak and play a pad while watching Discord’s input meter.\n\n## Mixing live microphone and soundboard (mixing-live-mic-and-soundboard)\nKeep talking while pads play into the same virtual mic.\n1. Confirm your real mic is selected as the SlipUpClipz input.\n2. Confirm the virtual cable is the routed output.\n3. Balance pad volumes so clips do not overpower your voice.\n4. Test in a private Discord call before ranked games.\n\n## Using Hear Myself (using-hear-myself)\nMonitor your processed voice and pads locally.\n1. Enable Hear Myself in Soundboard controls.\n2. Wear headphones to avoid speaker feedback.\n3. Adjust monitoring level until it is comfortable.\n\n## Troubleshooting echo or doubled audio (troubleshooting-echo-or-doubled-audio)\nStop hearing yourself twice in Discord or locally.\n1. Use headphones instead of open speakers.\n2. Disable Discord’s input monitoring if you already use Hear Myself.\n3. Make sure Discord is not also capturing your real mic in parallel.\n4. Turn off extra monitoring paths in Windows “Listen to this device”.\n\n## Enabling effects (enabling-voice-effects)\nTurn on real-time voice processing.\n1. Open Voice Effects on the Soundboard page.\n2. Enable effects.\n3. Speak while monitoring to confirm the change.\n\n## Adjusting pitch and bass (adjusting-pitch-and-bass)\nFine-tune how processed your voice sounds.\n1. Move pitch up or down in small steps.\n2. Adjust bass for warmth or thinness.\n3. Use Hear Myself to evaluate before joining a call.\n\n## Using presets (using-voice-presets)\nApply Deep, Squeaky, Radio, or Robot quickly.\n1. Choose a preset such as Deep, Squeaky, Radio, or Robot.\n2. Preview with Hear Myself.\n3. Switch back to Normal when you want your regular voice.\n\n## Reducing delay or distortion (reducing-delay-or-distortion)\nKeep effects usable in live chat.\n1. Avoid extreme pitch values during competitive play.\n2. Close unused audio apps competing for the device.\n3. Disable effects temporarily to compare latency.\n4. Update your audio drivers if distortion persists.\n\n## Checking for updates (checking-for-updates)\nSee if a newer SlipUpClipz build is available.\n1. Open Settings → Updates.\n2. Click Check for Updates.\n3. If an update exists, wait for the download to finish.\n\n## Restarting to install (restarting-to-install)\nApply a downloaded update safely.\n1. When prompted that an update is ready, choose Restart Now.\n2. Or choose Later and use Restart and Install in Settings when you are not mid-game.\n3. After relaunch, confirm the version number in Settings.\n\n## Activating Pro (activating-pro)\nUnlock Pro features with your license key.\n1. Open Settings and find the License section.\n2. Paste your Pro license key.\n3. Activate and confirm Pro features unlock (pads, global hotkeys, routing).\n\n## Moving to another computer (moving-to-another-computer)\nInstall SlipUpClipz elsewhere and restore Pro.\n1. Install SlipUpClipz on the new PC from the official download.\n2. Sign in / activate with the same Pro key when prompted.\n3. Reconfigure devices and hotkeys on the new machine.\n4. Contact support if activation fails after a hardware move.\n\n## Restoring access (restoring-access)\nRecover Pro when a key or purchase receipt is missing.\n1. Search your email for the original purchase or license message.\n2. Try activating again from Settings → License.\n3. Contact Support with your purchase email and approximate order date.\n\n=== FAQ ===\nQ: What does SlipUpClipz record?\nA: SlipUpClipz keeps a short rolling replay buffer of the audio sources you select — typically microphone, game, Discord, or system audio depending on your setup. It captures recent audio for clipping, not long continuous recordings by default.\n\nQ: Can it capture Discord audio?\nA: Yes, when your replay source includes system or application audio and Windows routing is set up correctly. Many players also use VB-Audio Virtual Cable so Discord voice can be mixed with the soundboard.\n\nQ: Can it capture game audio?\nA: Yes, when system/loopback capture is available and selected as the replay source. Exact behavior can vary by Windows audio settings and how the game outputs sound.\n\nQ: Does it record video?\nA: No. SlipUpClipz is audio-focused: replay clipping, trimming, soundboard playback, and virtual microphone routing.\n\nQ: Does it work with Valorant, CS2, Fortnite, and Discord?\nA: SlipUpClipz is built for Windows gaming and Discord voice chat. Compatibility depends on your audio routing (system capture and/or a virtual cable). Always follow each game’s and Discord’s device settings.\n\nQ: Do I need VB-Audio Virtual Cable?\nA: Not for basic clipping and local playback. You typically need a virtual audio device like VB-Audio Virtual Cable if you want Discord or games to hear your microphone and soundboard together.\n\nQ: Can people hear my microphone and soundboard together?\nA: Yes, when virtual microphone routing is configured: SlipUpClipz sends your mic and pads to a virtual device, and Discord (or another app) uses that virtual device as its input.\n\nQ: Can I import MP3 and WAV files?\nA: Yes. You can import MP3 and WAV files into the soundboard in addition to clips you capture with the replay buffer.\n\nQ: Does it work in the background?\nA: Yes. The replay buffer can keep running while you game. Pro unlocks global hotkeys, minimize-to-tray behavior, and launch on startup for background use.\n\nQ: Will it affect game performance?\nA: SlipUpClipz is designed to stay lightweight while buffering recent audio. Impact varies by PC, but it does not record video and avoids heavy background work. Close unused audio apps if you notice contention.\n\nQ: Is Pro a subscription?\nA: Yes. SlipUpClipz Pro is $4.99 USD per year with automatic yearly renewal. You keep the same license key across renewals. Cancel anytime from your Stripe billing portal link in the license email.\n\nQ: How do automatic updates work?\nA: Installed builds can check GitHub Releases for a newer version, download it in the background, and ask you to restart to install. You can also check manually in Settings → Updates.\n\nQ: Where are clips stored?\nA: Clips and related library data are stored locally on your computer. SlipUpClipz does not upload your recordings by default.\n\nQ: Why might Windows show a SmartScreen warning?\nA: New or unsigned apps often trigger Windows SmartScreen. If you downloaded SlipUpClipz from the official GitHub Releases or website download link, you can choose More info → Run anyway. Code signing will reduce these warnings once a certificate is in place.\n\n=== Recent release highlights ===\n- Redesigned Discord/Voicemod-inspired desktop interface\n- Improved waveform visibility\n- Moving waveform preview playhead\n- Movable trim selection\n- Improved voice effects\n- Green Clip button\n- Improved onboarding positioning\n- Rotating Quick Tips\n- Official S branding\n- 50 Pro soundboard pads\n- F11 fullscreen\n- Single-instance and tray fixes\n- Help Center integration\n- Stability fixes"
+}
