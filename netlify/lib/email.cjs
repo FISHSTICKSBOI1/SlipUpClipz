@@ -10,6 +10,88 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
 }
 
+function normalizeFromAddress(from) {
+  const trimmed = String(from || '').trim()
+  if (!trimmed) return ''
+
+  if (trimmed.includes('<') && trimmed.includes('>')) {
+    return trimmed
+  }
+
+  if (/^[^\s<>]+@[^\s<>]+$/.test(trimmed)) {
+    return `SlipUpClipz Support <${trimmed}>`
+  }
+
+  return trimmed
+}
+
+function extractEmailDomain(from) {
+  const match = String(from).match(/@([^>\s]+)>?$/)
+  return match?.[1]?.toLowerCase() || ''
+}
+
+function getEmailConfig() {
+  const apiKey = process.env.RESEND_API_KEY
+  const fromRaw = process.env.RESEND_FROM_EMAIL
+  const from = normalizeFromAddress(fromRaw)
+
+  if (!apiKey || !from) {
+    const missing = [
+      !apiKey ? 'RESEND_API_KEY' : null,
+      !fromRaw ? 'RESEND_FROM_EMAIL' : null,
+    ].filter(Boolean)
+    console.error(`[email] Missing required environment variables: ${missing.join(', ')}`)
+    return null
+  }
+
+  const fromDomain = extractEmailDomain(from)
+  if (fromDomain !== 'slipupclipz.com' && !fromDomain.endsWith('.slipupclipz.com')) {
+    console.error('[email] RESEND_FROM_EMAIL must use a verified slipupclipz.com domain')
+    return null
+  }
+
+  return { apiKey, from }
+}
+
+function getSupportToEmail() {
+  const configured = process.env.SUPPORT_TO_EMAIL?.trim()
+  if (configured) return configured
+  console.error('[email] Missing required environment variable: SUPPORT_TO_EMAIL')
+  return null
+}
+
+async function sendResendEmail(payload) {
+  const config = getEmailConfig()
+  if (!config) {
+    return { sent: false, reason: 'missing_resend_config' }
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: config.from,
+      ...payload,
+    }),
+  })
+
+  if (!response.ok) {
+    let details = ''
+    try {
+      details = (await response.text()).slice(0, 500)
+    } catch {
+      details = ''
+    }
+    console.error(`[email] Resend request failed with status ${response.status}`, details)
+    throw new Error(`Resend API request failed (${response.status})`)
+  }
+
+  return { sent: true }
+}
+
 function buildLicenseEmailHtml({ licenseKey }) {
   const safeKey = escapeHtml(licenseKey)
   const safeSupport = escapeHtml(SUPPORT_EMAIL)
@@ -50,42 +132,90 @@ function buildLicenseEmailText({ licenseKey }) {
 }
 
 async function sendLicenseEmail({ to, licenseKey }) {
-  const apiKey = process.env.RESEND_API_KEY
-  const from = process.env.RESEND_FROM_EMAIL
-
-  if (!apiKey || !from) {
-    console.warn('RESEND_API_KEY or RESEND_FROM_EMAIL missing; skipping license email')
-    return { sent: false, reason: 'missing_resend_config' }
-  }
-
-  if (/@gmail\.com/i.test(from)) {
-    throw new Error('RESEND_FROM_EMAIL must use a verified slipupclipz.com domain, not gmail.com')
-  }
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      reply_to: SUPPORT_EMAIL,
-      subject: 'Your SlipUpClipz Pro License',
-      html: buildLicenseEmailHtml({ licenseKey }),
-      text: buildLicenseEmailText({ licenseKey }),
-    }),
+  return sendResendEmail({
+    to: [to],
+    reply_to: SUPPORT_EMAIL,
+    subject: 'Your SlipUpClipz Pro License',
+    html: buildLicenseEmailHtml({ licenseKey }),
+    text: buildLicenseEmailText({ licenseKey }),
   })
+}
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Resend API error (${response.status}): ${errorText}`)
+function buildSupportEmailPayload({
+  name,
+  email,
+  subject,
+  category,
+  message,
+  appVersion,
+  windowsVersion,
+  diagnosticConsent,
+}) {
+  const to = getSupportToEmail()
+  if (!to) {
+    return null
   }
 
-  return { sent: true }
+  const safe = {
+    name: escapeHtml(name),
+    email: escapeHtml(email),
+    subject: escapeHtml(subject),
+    category: escapeHtml(category || 'Other'),
+    message: escapeHtml(message).replace(/\n/g, '<br>'),
+    appVersion: escapeHtml(appVersion || 'Not provided'),
+    windowsVersion: escapeHtml(windowsVersion || 'Not provided'),
+    diagnosticConsent: diagnosticConsent ? 'Yes' : 'No',
+  }
+
+  return {
+    to: [to],
+    reply_to: email,
+    subject: `[SlipUpClipz Support] ${subject}`,
+    html: `<!DOCTYPE html>
+<html>
+<body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#111;">
+  <h1 style="font-size:20px;">SlipUpClipz support request</h1>
+  <p><strong>Name:</strong> ${safe.name}</p>
+  <p><strong>Email:</strong> ${safe.email}</p>
+  <p><strong>Subject:</strong> ${safe.subject}</p>
+  <p><strong>Category:</strong> ${safe.category}</p>
+  <p><strong>App version:</strong> ${safe.appVersion}</p>
+  <p><strong>Windows version:</strong> ${safe.windowsVersion}</p>
+  <p><strong>Diagnostic follow-up allowed:</strong> ${safe.diagnosticConsent}</p>
+  <hr>
+  <p>${safe.message}</p>
+</body>
+</html>`,
+    text: [
+      'SlipUpClipz support request',
+      `Name: ${name}`,
+      `Email: ${email}`,
+      `Subject: ${subject}`,
+      `Category: ${category || 'Other'}`,
+      `App version: ${appVersion || 'Not provided'}`,
+      `Windows version: ${windowsVersion || 'Not provided'}`,
+      `Diagnostic follow-up allowed: ${diagnosticConsent ? 'Yes' : 'No'}`,
+      '',
+      message,
+    ].join('\n'),
+  }
+}
+
+async function sendSupportEmail(fields) {
+  const payload = buildSupportEmailPayload(fields)
+  if (!payload) {
+    return { sent: false, reason: 'missing_support_to_email' }
+  }
+
+  return sendResendEmail(payload)
 }
 
 module.exports = {
+  escapeHtml,
+  normalizeFromAddress,
+  getEmailConfig,
+  getSupportToEmail,
+  buildSupportEmailPayload,
   sendLicenseEmail,
+  sendSupportEmail,
 }

@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { AiSupportAssistant } from '../components/AiSupportAssistant'
 import { Button } from '../components/Button'
+import { DirectEmailSupport } from '../components/DirectEmailSupport'
 import { SectionHeading } from '../components/SectionHeading'
 import { Seo } from '../components/Seo'
 import { SITE } from '../config/site'
+import {
+  CONTACT_LIMITS,
+  validateContactForm,
+  type ContactFieldErrors,
+  type ContactFormState,
+} from '../lib/contactValidation'
 
 const CATEGORIES = [
   'Installation',
@@ -19,33 +26,8 @@ const CATEGORIES = [
   'Other',
 ] as const
 
-const LIMITS = {
-  nameMin: 1,
-  nameMax: 100,
-  subjectMin: 1,
-  subjectMax: 200,
-  messageMin: 1,
-  messageMax: 5000,
-  appVersionMax: 50,
-  windowsVersionMax: 100,
-} as const
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const SUBMIT_COOLDOWN_MS = 15_000
-
-type FormState = {
-  name: string
-  email: string
-  subject: string
-  category: string
-  message: string
-  appVersion: string
-  windowsVersion: string
-  diagnosticConsent: boolean
-}
-
-type FieldErrors = Partial<Record<keyof FormState | 'bot-field', string>>
-
+type FormState = ContactFormState
+type FieldErrors = ContactFieldErrors
 type SubmitStatus = 'idle' | 'sending' | 'success' | 'error'
 
 const INITIAL: FormState = {
@@ -63,68 +45,17 @@ function trimField(value: string) {
   return value.trim()
 }
 
-function validateForm(form: FormState): FieldErrors {
-  const errors: FieldErrors = {}
-
-  const name = trimField(form.name)
-  if (name.length < LIMITS.nameMin) errors.name = 'Name is required.'
-  else if (name.length > LIMITS.nameMax) errors.name = `Name must be ${LIMITS.nameMax} characters or fewer.`
-
-  const email = trimField(form.email)
-  if (!email) errors.email = 'Email is required.'
-  else if (!EMAIL_PATTERN.test(email)) errors.email = 'Enter a valid email address.'
-
-  const subject = trimField(form.subject)
-  if (subject.length < LIMITS.subjectMin) errors.subject = 'Subject is required.'
-  else if (subject.length > LIMITS.subjectMax) {
-    errors.subject = `Subject must be ${LIMITS.subjectMax} characters or fewer.`
-  }
-
-  if (!form.category) errors.category = 'Choose a problem category.'
-
-  const message = trimField(form.message)
-  if (message.length < LIMITS.messageMin) errors.message = 'Message is required.'
-  else if (message.length > LIMITS.messageMax) {
-    errors.message = `Message must be ${LIMITS.messageMax} characters or fewer.`
-  }
-
-  if (form.appVersion.length > LIMITS.appVersionMax) {
-    errors.appVersion = `App version must be ${LIMITS.appVersionMax} characters or fewer.`
-  }
-
-  if (form.windowsVersion.length > LIMITS.windowsVersionMax) {
-    errors.windowsVersion = `Windows version must be ${LIMITS.windowsVersionMax} characters or fewer.`
-  }
-
-  return errors
-}
-
-function encodeNetlifyBody(form: FormState, botField: string) {
-  const params = new URLSearchParams()
-  params.set('form-name', SITE.supportFormName)
-  params.set('bot-field', botField)
-  params.set('name', trimField(form.name))
-  params.set('email', trimField(form.email))
-  params.set('subject', trimField(form.subject))
-  params.set('category', form.category)
-  params.set('message', trimField(form.message))
-  params.set('app-version', trimField(form.appVersion))
-  params.set('windows-version', trimField(form.windowsVersion))
-  params.set('diagnostic-consent', form.diagnosticConsent ? 'yes' : 'no')
-  return params.toString()
-}
-
 export function ContactPage() {
   const [form, setForm] = useState<FormState>(INITIAL)
   const [botField, setBotField] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [status, setStatus] = useState<SubmitStatus>('idle')
-  const [cooldownUntil, setCooldownUntil] = useState(0)
+  const [submitError, setSubmitError] = useState('')
   const statusRef = useRef<HTMLDivElement>(null)
+  const submittingRef = useRef(false)
 
   const isSending = status === 'sending'
-  const isCooldown = Date.now() < cooldownUntil
-  const submitDisabled = isSending || isCooldown
+  const submitDisabled = isSending
 
   useEffect(() => {
     if (status === 'success' || status === 'error') {
@@ -142,12 +73,10 @@ export function ContactPage() {
     })
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function submitForm() {
+    if (submitDisabled || submittingRef.current) return
 
-    if (submitDisabled) return
-
-    const nextErrors = validateForm(form)
+    const nextErrors = validateContactForm(form)
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
       setStatus('idle')
@@ -155,30 +84,69 @@ export function ContactPage() {
     }
 
     setErrors({})
+    setSubmitError('')
     setStatus('sending')
+    submittingRef.current = true
 
     try {
-      const response = await fetch('/', {
+      const response = await fetch(SITE.contactSupportEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: encodeNetlifyBody(form, botField),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimField(form.name),
+          email: trimField(form.email),
+          subject: trimField(form.subject),
+          category: form.category,
+          message: trimField(form.message),
+          appVersion: trimField(form.appVersion),
+          windowsVersion: trimField(form.windowsVersion),
+          diagnosticConsent: form.diagnosticConsent,
+          botField,
+        }),
       })
 
-      if (!response.ok) {
-        throw new Error('Netlify form submission failed')
+      let data: {
+        success?: boolean
+        sent?: boolean
+        error?: string
+        fieldErrors?: FieldErrors
+      } = {}
+      try {
+        data = (await response.json()) as typeof data
+      } catch {
+        data = {}
+      }
+
+      const succeeded = response.ok && (data.success === true || data.sent === true)
+
+      if (!succeeded) {
+        if (data.fieldErrors) {
+          setErrors(data.fieldErrors)
+        }
+        setSubmitError(
+          response.status === 429
+            ? data.error || 'Too many messages. Please wait a minute and try again.'
+            : data.error || 'We could not send your message. Please try again.',
+        )
+        setStatus('error')
+        return
       }
 
       setForm(INITIAL)
       setBotField('')
       setStatus('success')
-      setCooldownUntil(Date.now() + SUBMIT_COOLDOWN_MS)
     } catch {
+      setSubmitError('Unable to reach the support service. Please try again.')
       setStatus('error')
-      setCooldownUntil(Date.now() + SUBMIT_COOLDOWN_MS)
+    } finally {
+      submittingRef.current = false
     }
   }
 
-  const directMailto = `mailto:${SITE.supportEmail}?subject=${encodeURIComponent(SITE.supportMailtoSubject)}`
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await submitForm()
+  }
 
   return (
     <>
@@ -199,13 +167,9 @@ export function ContactPage() {
             className="panel space-y-5 p-6 sm:p-8"
             name={SITE.supportFormName}
             method="POST"
-            data-netlify="true"
-            data-netlify-honeypot="bot-field"
             onSubmit={onSubmit}
             noValidate
           >
-            <input type="hidden" name="form-name" value={SITE.supportFormName} />
-
             <p className="hidden" aria-hidden="true">
               <label>
                 Do not fill this out:{' '}
@@ -221,7 +185,7 @@ export function ContactPage() {
 
             <div className="rounded-xl border border-ink-border/80 bg-ink-raised/40 px-4 py-3 text-sm text-slate-300">
               <p>
-                Support form information is submitted through Netlify and used only to respond to
+                Support form messages are emailed to the SlipUpClipz team and used only to respond to
                 your request.
               </p>
               <p className="mt-2">
@@ -249,11 +213,18 @@ export function ContactPage() {
                   role="alert"
                   className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
                 >
-                  We couldn&apos;t send your message. Please try again or email us directly at{' '}
-                  <a href={directMailto} className="font-semibold underline underline-offset-2">
-                    {SITE.supportEmail}
-                  </a>
-                  .
+                  <p>{submitError || 'We couldn’t send your message. Please try again.'}</p>
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="!px-3 !py-1.5 !text-xs"
+                      onClick={() => void submitForm()}
+                      disabled={isSending}
+                    >
+                      Retry
+                    </Button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -263,7 +234,7 @@ export function ContactPage() {
                 id="name"
                 name="name"
                 required
-                maxLength={LIMITS.nameMax}
+                maxLength={CONTACT_LIMITS.nameMax}
                 value={form.name}
                 onChange={(e) => update('name', e.target.value)}
                 className="field"
@@ -294,7 +265,7 @@ export function ContactPage() {
                 id="subject"
                 name="subject"
                 required
-                maxLength={LIMITS.subjectMax}
+                maxLength={CONTACT_LIMITS.subjectMax}
                 value={form.subject}
                 onChange={(e) => update('subject', e.target.value)}
                 className="field"
@@ -336,7 +307,7 @@ export function ContactPage() {
                 name="message"
                 required
                 rows={6}
-                maxLength={LIMITS.messageMax}
+                maxLength={CONTACT_LIMITS.messageMax}
                 value={form.message}
                 onChange={(e) => update('message', e.target.value)}
                 className="field resize-y"
@@ -345,7 +316,7 @@ export function ContactPage() {
                 disabled={isSending}
               />
               <p id="message-hint" className="mt-2 text-xs text-slate-500">
-                Up to {LIMITS.messageMax.toLocaleString()} characters.
+                Up to {CONTACT_LIMITS.messageMax.toLocaleString()} characters.
               </p>
             </Field>
 
@@ -359,7 +330,7 @@ export function ContactPage() {
                 <input
                   id="app-version"
                   name="app-version"
-                  maxLength={LIMITS.appVersionMax}
+                  maxLength={CONTACT_LIMITS.appVersionMax}
                   value={form.appVersion}
                   onChange={(e) => update('appVersion', e.target.value)}
                   className="field"
@@ -377,7 +348,7 @@ export function ContactPage() {
                 <input
                   id="windows-version"
                   name="windows-version"
-                  maxLength={LIMITS.windowsVersionMax}
+                  maxLength={CONTACT_LIMITS.windowsVersionMax}
                   placeholder="e.g. Windows 11 24H2"
                   value={form.windowsVersion}
                   onChange={(e) => update('windowsVersion', e.target.value)}
@@ -405,16 +376,11 @@ export function ContactPage() {
               </label>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex flex-col gap-4">
               <Button type="submit" className="w-full sm:w-auto" disabled={submitDisabled}>
                 {isSending ? 'Sending…' : 'Send message'}
               </Button>
-              <a
-                href={directMailto}
-                className="inline-flex items-center justify-center text-sm font-semibold text-glow-magenta underline-offset-2 hover:underline"
-              >
-                Email support directly
-              </a>
+              <DirectEmailSupport compact />
             </div>
           </form>
 

@@ -18,6 +18,7 @@
     "release": "npm run preflight:release && npm run release:clean && npm run build && electron-builder --win --publish always && npm run verify:release",
     "license:demo": "node scripts/generate-license.mjs",
     "test:license": "npx tsx --test electron/licenseLogic.test.ts",
+    "website:test": "node --test netlify/lib/email.test.cjs netlify/functions/contact-support.test.cjs netlify/functions/support-assistant.test.cjs && npx tsx --test website/src/lib/checkout.test.ts website/src/lib/contactForm.test.ts website/src/lib/supportLinks.test.ts",
     "website:dev": "vite --config website/vite.config.ts",
     "website:build": "node scripts/build-website.mjs",
     "website:preview": "vite preview --config website/vite.config.ts",

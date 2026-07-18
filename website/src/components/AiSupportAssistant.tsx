@@ -1,28 +1,30 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Button } from './Button'
 import { SITE } from '../config/site'
 
 const STARTER_QUESTIONS = [
-  'Why is my clip silent?',
-  'How do I use SlipUpClipz in Discord?',
-  'How do I change my Clip hotkey?',
-  "Why can't I hear my soundboard?",
-  'How do automatic updates work?',
+  'How do I capture a clip?',
+  'Why is my microphone not working?',
+  'How do I use the soundboard in Discord?',
+  'What is included with Pro?',
+  'Where is my license key?',
 ] as const
 
 const MAX_USER_MESSAGE = 1000
 const MAX_STORED_MESSAGES = 12
 const SUBMIT_COOLDOWN_MS = 3000
 const UNAVAILABLE_MESSAGE =
-  'AI support requires the Netlify development server or a deployed Netlify site with functions enabled. Run npm run website:netlify-dev for full local testing.'
+  'AI support is currently unavailable. Please use the Help Center or email support.'
 
 type ChatRole = 'user' | 'assistant'
+type FeedbackValue = 'up' | 'down'
 
 type ChatMessage = {
   id: string
   role: ChatRole
   content: string
+  feedback?: FeedbackValue
 }
 
 function createId() {
@@ -33,23 +35,37 @@ function trimHistory(messages: ChatMessage[]) {
   return messages.slice(-MAX_STORED_MESSAGES)
 }
 
+function detectPlanInterest(text: string): 'free' | 'pro' | 'unspecified' {
+  const lower = text.toLowerCase()
+  if (/\bpro\b/.test(lower) || /license|subscription|\$4\.99/.test(lower)) return 'pro'
+  if (/\bfree\b/.test(lower)) return 'free'
+  return 'unspecified'
+}
+
 export function AiSupportAssistant() {
+  const location = useLocation()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [statusMessage, setStatusMessage] = useState('')
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [serviceUnavailable, setServiceUnavailable] = useState(false)
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const statusRef = useRef<HTMLDivElement>(null)
+  const sendingRef = useRef(false)
   const inputId = useId()
   const listId = useId()
 
   const isLoading = status === 'loading'
   const isCooldown = Date.now() < cooldownUntil
   const sendDisabled =
-    isLoading || isCooldown || serviceUnavailable || !input.trim() || input.trim().length > MAX_USER_MESSAGE
+    isLoading ||
+    isCooldown ||
+    serviceUnavailable ||
+    !input.trim() ||
+    input.trim().length > MAX_USER_MESSAGE
 
   useEffect(() => {
     if (messagesRef.current) {
@@ -65,7 +81,7 @@ export function AiSupportAssistant() {
 
   async function sendMessage(rawMessage: string) {
     const message = rawMessage.trim()
-    if (!message || isLoading || isCooldown) return
+    if (!message || isLoading || isCooldown || sendingRef.current || serviceUnavailable) return
     if (message.length > MAX_USER_MESSAGE) {
       setStatus('error')
       setStatusMessage(`Messages must be ${MAX_USER_MESSAGE} characters or fewer.`)
@@ -75,12 +91,14 @@ export function AiSupportAssistant() {
     const previousMessages = messages
     setStatus('idle')
     setStatusMessage('')
+    setLastFailedMessage(null)
 
     const userMessage: ChatMessage = { id: createId(), role: 'user', content: message }
     const nextMessages = trimHistory([...messages, userMessage])
     setMessages(nextMessages)
     setInput('')
     setStatus('loading')
+    sendingRef.current = true
 
     try {
       const response = await fetch(SITE.supportAssistantEndpoint, {
@@ -92,6 +110,11 @@ export function AiSupportAssistant() {
             role: item.role,
             content: item.content,
           })),
+          pageContext: {
+            currentPage: location.pathname || '/',
+            websiteVersion: SITE.currentVersion,
+            planInterest: detectPlanInterest(message),
+          },
         }),
       })
 
@@ -102,20 +125,33 @@ export function AiSupportAssistant() {
         data = {}
       }
 
-      if (response.status === 404) {
+      if (response.status === 404 || response.status === 503) {
         setServiceUnavailable(true)
         setStatus('error')
-        setStatusMessage(UNAVAILABLE_MESSAGE)
+        setStatusMessage(data.error || UNAVAILABLE_MESSAGE)
+        setLastFailedMessage(message)
         setMessages(previousMessages)
+        return
+      }
+
+      if (response.status === 429) {
+        setStatus('error')
+        setStatusMessage(
+          data.error || 'AI support is busy right now. Please wait a moment and try again.',
+        )
+        setLastFailedMessage(message)
+        setCooldownUntil(Date.now() + 60_000)
         return
       }
 
       if (!response.ok || !data.reply) {
         setStatus('error')
         setStatusMessage(
-          data.error ||
-            'AI support is temporarily unavailable. Please try the Help Center or email support.',
+          response.status >= 500
+            ? 'AI support encountered a temporary server error. Please try again shortly.'
+            : data.error || 'AI support could not process that request. Please try again.',
         )
+        setLastFailedMessage(message)
         return
       }
 
@@ -131,14 +167,21 @@ export function AiSupportAssistant() {
       setStatus('error')
       setStatusMessage(UNAVAILABLE_MESSAGE)
       setServiceUnavailable(true)
+      setLastFailedMessage(message)
       setMessages(previousMessages)
     } finally {
+      sendingRef.current = false
       inputRef.current?.focus()
     }
   }
 
   function handleSubmit() {
     void sendMessage(input)
+  }
+
+  function handleRetry() {
+    if (!lastFailedMessage || isLoading) return
+    void sendMessage(lastFailedMessage)
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -154,10 +197,19 @@ export function AiSupportAssistant() {
     setMessages([])
     setStatus('idle')
     setStatusMessage('')
+    setLastFailedMessage(null)
     inputRef.current?.focus()
   }
 
-  const directMailto = `mailto:${SITE.supportEmail}?subject=${encodeURIComponent(SITE.supportMailtoSubject)}`
+  function setFeedback(messageId: string, value: FeedbackValue) {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId && message.role === 'assistant'
+          ? { ...message, feedback: message.feedback === value ? undefined : value }
+          : message,
+      ),
+    )
+  }
 
   return (
     <section className="panel relative overflow-hidden p-6 sm:p-8">
@@ -168,8 +220,8 @@ export function AiSupportAssistant() {
         </div>
         <h2 className="mt-4 font-display text-2xl font-bold text-white">AI Support Assistant</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-400">
-          Ask about installation, clipping, Discord routing, soundboard playback, updates, and Pro
-          features. Answers are based on the public Help Center.
+          Get step-by-step help with capture, Discord routing, soundboard playback, updates, and Pro
+          features. Conversation history stays while this panel is open.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -189,7 +241,7 @@ export function AiSupportAssistant() {
         <div
           id={listId}
           ref={messagesRef}
-          className="mt-5 max-h-72 space-y-3 overflow-y-auto rounded-xl border border-ink-border/80 bg-ink/40 p-4"
+          className="mt-5 max-h-80 space-y-3 overflow-y-auto rounded-xl border border-ink-border/80 bg-ink/40 p-4"
           aria-live="polite"
           aria-relevant="additions text"
         >
@@ -211,6 +263,36 @@ export function AiSupportAssistant() {
                   {message.role === 'user' ? 'You' : 'Assistant'}
                 </p>
                 <p className="whitespace-pre-wrap">{message.content}</p>
+                {message.role === 'assistant' ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Helpful answer"
+                      aria-pressed={message.feedback === 'up'}
+                      onClick={() => setFeedback(message.id, 'up')}
+                      className={`rounded-md border px-2 py-1 text-xs transition ${
+                        message.feedback === 'up'
+                          ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
+                          : 'border-ink-border text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      👍
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Unhelpful answer"
+                      aria-pressed={message.feedback === 'down'}
+                      onClick={() => setFeedback(message.id, 'down')}
+                      className={`rounded-md border px-2 py-1 text-xs transition ${
+                        message.feedback === 'down'
+                          ? 'border-rose-400/50 bg-rose-500/15 text-rose-200'
+                          : 'border-ink-border text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      👎
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ))
           )}
@@ -228,20 +310,22 @@ export function AiSupportAssistant() {
           className="mt-3 min-h-[1px] text-sm"
         >
           {status === 'error' && statusMessage ? (
-            <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-rose-100">
-              {statusMessage}{' '}
-              <Link to={SITE.paths.help} className="font-semibold underline underline-offset-2">
-                Help Center
-              </Link>{' '}
-              ·{' '}
-              <Link to={SITE.paths.contact} className="font-semibold underline underline-offset-2">
-                Contact
-              </Link>{' '}
-              ·{' '}
-              <a href={directMailto} className="font-semibold underline underline-offset-2">
-                {SITE.supportEmail}
-              </a>
-            </p>
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-rose-100">
+              <p>{statusMessage}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {lastFailedMessage && !serviceUnavailable ? (
+                  <Button type="button" variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={handleRetry}>
+                    Retry
+                  </Button>
+                ) : null}
+                <Link to={SITE.paths.help} className="font-semibold underline underline-offset-2">
+                  Help Center
+                </Link>
+                <Link to={SITE.paths.contact} className="font-semibold underline underline-offset-2">
+                  Contact
+                </Link>
+              </div>
+            </div>
           ) : null}
         </div>
 
@@ -258,7 +342,7 @@ export function AiSupportAssistant() {
             onKeyDown={handleKeyDown}
             maxLength={MAX_USER_MESSAGE}
             disabled={isLoading || serviceUnavailable}
-            placeholder="Example: Why is my clip silent?"
+            placeholder="Example: Why is my microphone not working?"
             className="field w-full resize-y"
             aria-describedby={`${inputId}-hint`}
           />
