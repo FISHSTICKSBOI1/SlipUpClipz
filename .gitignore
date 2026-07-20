@@ -2,6 +2,7 @@ node_modules
 dist
 dist-electron
 *.local
-
+release/
+dist-website/
 # Local Netlify folder
 .netlify

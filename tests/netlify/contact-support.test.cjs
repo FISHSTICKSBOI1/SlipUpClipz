@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe('contact-support validation', () => {
   it('rejects empty required fields', () => {
-    const { validateBody } = require('./contact-support.cjs')
+    const { validateBody } = require('../../netlify/functions/contact-support.cjs')
     const { errors } = validateBody({
       name: '',
       email: 'bad',
@@ -32,7 +32,7 @@ describe('contact-support validation', () => {
   })
 
   it('accepts a valid payload', () => {
-    const { validateBody } = require('./contact-support.cjs')
+    const { validateBody } = require('../../netlify/functions/contact-support.cjs')
     const { data, errors } = validateBody({
       name: 'Alex',
       email: 'alex@example.com',
@@ -55,7 +55,7 @@ describe('contact-support handler', () => {
       json: async () => ({ id: 'email_123' }),
     }))
 
-    const { handler } = require('./contact-support.cjs')
+    const { handler } = require('../../netlify/functions/contact-support.cjs')
     const response = await handler({
       httpMethod: 'POST',
       headers: {},
@@ -80,7 +80,7 @@ describe('contact-support handler', () => {
       json: async () => ({}),
     }))
 
-    const { handler } = require('./contact-support.cjs')
+    const { handler } = require('../../netlify/functions/contact-support.cjs')
     const response = await handler({
       httpMethod: 'POST',
       headers: {},

@@ -4,7 +4,7 @@ const {
   sanitizeHistory,
   sanitizePageContext,
   buildSystemPrompt,
-} = require('./support-assistant.cjs')
+} = require('../../netlify/functions/support-assistant.cjs')
 
 describe('support-assistant helpers', () => {
   it('keeps recent conversation history for OpenAI', () => {
