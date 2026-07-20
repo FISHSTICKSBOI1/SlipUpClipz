@@ -52,7 +52,7 @@ export function PricingPage() {
             <a href={SITE.paths.refund} className="text-glow-magenta hover:underline">
               Refund Policy
             </a>{' '}
-            for purchase details. Valid creator codes apply 25% off the first year only.
+            for purchase details. Promotion codes can be entered on the Stripe Checkout page.
           </p>
 
           <div className="mx-auto mt-16 max-w-4xl">

@@ -3,15 +3,13 @@ export type CheckoutResponse = {
   error?: string
 }
 
-export async function startProCheckout(affiliateCode?: string): Promise<CheckoutResponse> {
+export async function startProCheckout(): Promise<CheckoutResponse> {
   const response = await fetch('/.netlify/functions/create-checkout', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      affiliateCode: affiliateCode?.trim() || undefined,
-    }),
+    body: JSON.stringify({}),
   })
 
   const payload = (await response.json()) as CheckoutResponse
