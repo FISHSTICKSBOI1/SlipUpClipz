@@ -55,7 +55,7 @@ function getNetlifyBlobStore() {
     throw new Error('@netlify/blobs is not available')
   }
 
-  return blobs.getStore({ name: STORE_NAME, consistency: 'strong' })
+  return blobs.getStore(STORE_NAME)
 }
 
 function wrapBlobStore(store, environment) {
@@ -64,11 +64,11 @@ function wrapBlobStore(store, environment) {
     async get(key, options) {
       return store.get(key, options)
     },
-    async set(key, value) {
-      await store.set(key, value)
+    async set(key, value, options) {
+      return store.set(key, value, options)
     },
-    async setJSON(key, value) {
-      await store.setJSON(key, value)
+    async setJSON(key, value, options) {
+      return store.setJSON(key, value, options)
     },
     async getJSON(key) {
       return store.get(key, { type: 'json' })
@@ -122,8 +122,16 @@ function createDevStore() {
     },
     async set(key, value) {
       writeFileSync(devStorePath(key), value, 'utf8')
+      return { modified: true }
     },
-    async setJSON(key, value) {
+    async setJSON(key, value, options = {}) {
+      if (options.onlyIfNew) {
+        const existing = await this.getJSON(key)
+        if (existing != null) {
+          return { modified: false }
+        }
+      }
+
       await this.set(
         key,
         JSON.stringify({
@@ -131,6 +139,7 @@ function createDevStore() {
           _storeEnvironment: 'dev-local',
         }),
       )
+      return { modified: true }
     },
     async getJSON(key) {
       return this.get(key, { type: 'json' })

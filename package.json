@@ -18,20 +18,20 @@
     "release": "npm run preflight:release && npm run release:clean && npm run build && electron-builder --win --publish always && npm run verify:release",
     "license:demo": "node scripts/generate-license.mjs",
     "test:license": "npx tsx --test electron/licenseLogic.test.ts",
-    "website:test": "node --test netlify/lib/email.test.cjs tests/netlify/contact-support.test.cjs tests/netlify/support-assistant.test.cjs tests/netlify/storage.test.cjs && npx tsx --test website/src/lib/checkout.test.ts website/src/lib/contactForm.test.ts website/src/lib/supportLinks.test.ts",
+    "website:test": "node --test netlify/lib/email.test.cjs tests/netlify/contact-support.test.cjs tests/netlify/support-assistant.test.cjs tests/netlify/storage.test.cjs tests/netlify/idempotency.test.cjs && npx tsx --test website/src/lib/checkout.test.ts website/src/lib/contactForm.test.ts website/src/lib/supportLinks.test.ts",
     "website:dev": "vite --config website/vite.config.ts",
     "website:build": "node scripts/build-website.mjs",
     "website:preview": "vite preview --config website/vite.config.ts",
     "website:netlify-dev": "npx netlify dev"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.7.9",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.8.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.3",
-    "stripe": "^17.7.0",
-    "@netlify/blobs": "^8.1.0"
+    "stripe": "^17.7.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",
