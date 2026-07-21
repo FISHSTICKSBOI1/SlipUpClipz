@@ -4,17 +4,58 @@ const { join } = require('node:path')
 const STORE_NAME = process.env.COMMERCE_STORE_NAME || 'slipupclipz-commerce'
 const DEV_STORE_DIR = join(__dirname, '../../.netlify/commerce-dev')
 
+function isDeployedNetlifyRuntime() {
+  // Deployed Netlify Functions expose SITE_ID. Do not use build-only vars
+  // (CONTEXT, NETLIFY, DEPLOY_PRIME_URL) or NODE_ENV for this check.
+  return Boolean(process.env.SITE_ID)
+}
+
 function isNetlifyProduction() {
-  return process.env.NETLIFY === 'true' && process.env.CONTEXT === 'production'
+  return isDeployedNetlifyRuntime()
 }
 
 function isLocalNetlifyDev() {
   return process.env.NETLIFY_DEV === 'true'
 }
 
+function loadBlobsModule() {
+  try {
+    return require('@netlify/blobs')
+  } catch {
+    return null
+  }
+}
+
+function logStorageDiagnostics(blobsModuleLoaded) {
+  console.info('[commerce-storage] runtime', {
+    hasSiteId: Boolean(process.env.SITE_ID),
+    hasUrl: Boolean(process.env.URL),
+    isLocalDev: isLocalNetlifyDev(),
+    blobsModuleLoaded: Boolean(blobsModuleLoaded),
+  })
+}
+
+/**
+ * Lambda-compat handlers must call this once per request before getStore().
+ * @netlify/blobs@8.x requires connectLambda(event) in Lambda compatibility mode.
+ */
+function connectCommerceBlobs(event) {
+  if (!event || typeof event !== 'object') return
+
+  const blobs = loadBlobsModule()
+  if (!blobs || typeof blobs.connectLambda !== 'function') return
+  if (typeof event.blobs !== 'string' || !event.blobs) return
+
+  blobs.connectLambda(event)
+}
+
 function getNetlifyBlobStore() {
-  const { getStore } = require('@netlify/blobs')
-  return getStore({ name: STORE_NAME, consistency: 'strong' })
+  const blobs = loadBlobsModule()
+  if (!blobs || typeof blobs.getStore !== 'function') {
+    throw new Error('@netlify/blobs is not available')
+  }
+
+  return blobs.getStore({ name: STORE_NAME, consistency: 'strong' })
 }
 
 function wrapBlobStore(store, environment) {
@@ -116,7 +157,10 @@ function createDevStore() {
 }
 
 async function getCommerceStore() {
-  if (isNetlifyProduction()) {
+  const blobsModule = loadBlobsModule()
+  logStorageDiagnostics(Boolean(blobsModule))
+
+  if (isDeployedNetlifyRuntime()) {
     try {
       return wrapBlobStore(getNetlifyBlobStore(), 'production')
     } catch (error) {
@@ -135,11 +179,8 @@ async function getCommerceStore() {
     }
   }
 
-  try {
-    return wrapBlobStore(getNetlifyBlobStore(), 'production')
-  } catch {
-    throw new Error('Commerce storage is unavailable outside Netlify production or local Netlify dev.')
-  }
+  // Never silently fall back to local files outside genuine local Netlify dev.
+  throw new Error('Commerce storage is unavailable outside Netlify production or local Netlify dev.')
 }
 
 async function licenseExists(licenseKey) {
@@ -297,6 +338,7 @@ async function adjustAffiliateCommission(code, adjustment) {
 }
 
 module.exports = {
+  connectCommerceBlobs,
   getCommerceStore,
   licenseExists,
   getLicenseByKey,
@@ -307,4 +349,5 @@ module.exports = {
   recordAffiliateCommission,
   adjustAffiliateCommission,
   isNetlifyProduction,
+  isDeployedNetlifyRuntime,
 }

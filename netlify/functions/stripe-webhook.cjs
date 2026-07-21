@@ -14,6 +14,7 @@ const {
   getRefundCommissionAdjustmentCents,
 } = require('../lib/payments.cjs')
 const {
+  connectCommerceBlobs,
   licenseExists,
   saveLicenseRecord,
   getLicenseBySubscriptionId,
@@ -22,12 +23,44 @@ const {
   recordAffiliateCommission,
 } = require('../lib/storage.cjs')
 
+function normalizeSecret(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+}
+
+function getHeader(headers, name) {
+  if (!headers || typeof headers !== 'object') return undefined
+  const target = String(name).toLowerCase()
+  for (const [key, value] of Object.entries(headers)) {
+    if (String(key).toLowerCase() !== target) continue
+    if (Array.isArray(value)) return value[0]
+    return value
+  }
+  return undefined
+}
+
 function getRawBody(event) {
-  if (!event.body) return ''
+  if (event == null) return ''
+
+  // Some Netlify runtimes expose an unmodified raw body separately.
+  if (typeof event.rawBody === 'string' && event.rawBody.length > 0) {
+    return event.rawBody
+  }
+
+  if (event.body == null || event.body === '') return ''
+
   if (event.isBase64Encoded) {
     return Buffer.from(event.body, 'base64').toString('utf8')
   }
-  return event.body
+
+  if (typeof event.body === 'string') {
+    return event.body
+  }
+
+  // Parsed objects cannot be signature-verified reliably.
+  console.error('[stripe-webhook] Request body was parsed; Stripe requires the raw body string')
+  return JSON.stringify(event.body)
 }
 
 async function getExpandedCheckoutSession(stripe, sessionId) {
@@ -384,24 +417,52 @@ async function handleDisputeClosed(stripe, dispute) {
 }
 
 exports.handler = async (event) => {
+  connectCommerceBlobs(event)
+
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  const webhookSecret = normalizeSecret(process.env.STRIPE_WEBHOOK_SECRET)
   if (!webhookSecret) {
     return jsonResponse(503, { error: 'Webhook secret is not configured' })
   }
 
   const stripe = getStripe()
-  const signature = event.headers['stripe-signature']
+  const headers = event.headers || {}
+  const signature =
+    getHeader(headers, 'stripe-signature') ||
+    getHeader(event.multiValueHeaders || {}, 'stripe-signature')
   const rawBody = getRawBody(event)
+
+  if (!signature) {
+    console.error('[stripe-webhook] Missing stripe-signature header', {
+      headerKeys: Object.keys(headers),
+      multiValueHeaderKeys: Object.keys(event.multiValueHeaders || {}),
+    })
+    return jsonResponse(400, { error: 'Invalid webhook signature' })
+  }
+
+  if (!rawBody) {
+    console.error('[stripe-webhook] Empty request body for signature verification', {
+      isBase64Encoded: Boolean(event.isBase64Encoded),
+      bodyType: typeof event.body,
+    })
+    return jsonResponse(400, { error: 'Invalid webhook signature' })
+  }
 
   let stripeEvent
   try {
+    // Stripe requires the exact raw request body bytes + endpoint signing secret.
     stripeEvent = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
   } catch (error) {
-    console.error('Stripe webhook signature verification failed', error)
+    console.error('[stripe-webhook] Signature verification failed', {
+      message: error instanceof Error ? error.message : String(error),
+      bodyType: typeof event.body,
+      isBase64Encoded: Boolean(event.isBase64Encoded),
+      bodyLength: typeof rawBody === 'string' ? rawBody.length : 0,
+      secretPrefix: webhookSecret.slice(0, 6),
+    })
     return jsonResponse(400, { error: 'Invalid webhook signature' })
   }
 

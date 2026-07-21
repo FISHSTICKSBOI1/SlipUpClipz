@@ -1,6 +1,6 @@
 const { getSiteUrl, getStripe, jsonResponse } = require('../lib/commerce.cjs')
 const { normalizeLicenseKey, isLicenseKeyFormat } = require('../lib/license.cjs')
-const { getLicenseByKey } = require('../lib/storage.cjs')
+const { connectCommerceBlobs, getLicenseByKey } = require('../lib/storage.cjs')
 
 function parseBody(event) {
   if (!event.body) return {}
@@ -13,6 +13,8 @@ function parseBody(event) {
 }
 
 exports.handler = async (event) => {
+  connectCommerceBlobs(event)
+
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
