@@ -1,6 +1,6 @@
 {
   "name": "slipupclipz",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "SlipUpClipz desktop soundboard and instant replay clip studio",
   "author": "SlipUpClipz",
   "main": "dist-electron/main.js",

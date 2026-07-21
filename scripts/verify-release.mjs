@@ -1,11 +1,14 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execFileSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const releaseDir = path.join(root, 'release')
 const packageJsonPath = path.join(root, 'package.json')
 const latestYmlPath = path.join(releaseDir, 'latest.yml')
+const asarPath = path.join(releaseDir, 'win-unpacked', 'resources', 'app.asar')
 
 function fail(message) {
   console.error(`[verify:release] ${message}`)
@@ -32,6 +35,61 @@ function parseLatestYml(raw) {
     version: versionMatch[1].trim().replace(/^['"]|['"]$/g, ''),
     path: pathMatch[1].trim().replace(/^['"]|['"]$/g, ''),
     url: urlMatch ? urlMatch[1].trim().replace(/^['"]|['"]$/g, '') : null,
+  }
+}
+
+function findAsarCli() {
+  const candidates = [
+    path.join(root, 'node_modules', '@electron', 'asar', 'bin', 'asar.js'),
+    path.join(root, 'node_modules', 'asar', 'bin', 'asar.js'),
+    path.join(root, 'node_modules', 'app-builder-lib', 'node_modules', '@electron', 'asar', 'bin', 'asar.js'),
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+function verifyPackagedLicenseValidation() {
+  if (!existsSync(asarPath)) {
+    fail('Missing release/win-unpacked/resources/app.asar')
+  }
+
+  const asarCli = findAsarCli()
+  if (!asarCli) {
+    fail('Could not find @electron/asar CLI to inspect packaged main.js')
+  }
+
+  const extractDir = mkdtempSync(path.join(tmpdir(), 'slipupclipz-verify-asar-'))
+  const extractedMain = path.join(extractDir, 'main.js')
+  try {
+    execFileSync(
+      process.execPath,
+      [asarCli, 'extract-file', asarPath, 'dist-electron/main.js', extractedMain],
+      { stdio: 'pipe' },
+    )
+
+    const mainJs = readFileSync(extractedMain, 'utf8')
+    const productionUrl = 'https://slipupclipz.com/.netlify/functions/validate-license'
+
+    if (!mainJs.includes(productionUrl)) {
+      fail(`Packaged main.js is missing production validate-license URL: ${productionUrl}`)
+    }
+
+    if (!/license:activate/.test(mainJs)) {
+      fail('Packaged main.js is missing license:activate handler.')
+    }
+
+    // Old checksum-only builds activated via local SHA256 secret without the production URL.
+    if (mainJs.includes('slipupclipz-license-v1') && !mainJs.includes('validateLicenseWithServer') && !mainJs.includes(productionUrl)) {
+      fail('Packaged app still appears to use checksum-only license activation.')
+    }
+
+    console.log('[verify:release] Packaged license validation OK')
+    console.log('  production URL present : yes')
+    console.log(`  asar                   : ${asarPath}`)
+  } finally {
+    rmSync(extractDir, { recursive: true, force: true })
   }
 }
 
@@ -81,6 +139,8 @@ if (latest.url && latest.url !== publishedInstallerName) {
     `latest.yml files[0].url "${latest.url}" does not match expected published name "${publishedInstallerName}".`,
   )
 }
+
+verifyPackagedLicenseValidation()
 
 console.log('[verify:release] OK')
 console.log(`  package.json version : ${version}`)

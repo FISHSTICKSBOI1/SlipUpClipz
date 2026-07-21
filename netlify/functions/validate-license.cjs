@@ -3,6 +3,8 @@ const { normalizeLicenseKey, isLicenseKeyFormat } = require('../lib/license.cjs'
 const { evaluateLicenseRecord } = require('../lib/license-validation.cjs')
 const { connectCommerceBlobs, getLicenseByKey } = require('../lib/storage.cjs')
 
+const STORE_NAME = process.env.COMMERCE_STORE_NAME || 'slipupclipz-commerce'
+
 function parseBody(event) {
   if (!event.body) return {}
 
@@ -11,6 +13,21 @@ function parseBody(event) {
   } catch {
     return null
   }
+}
+
+function maskedLicenseSuffix(licenseKey) {
+  const match = String(licenseKey || '').match(/-([A-Z0-9]{4})$/i)
+  return match ? match[1].toUpperCase() : '****'
+}
+
+function logValidationDiagnostics({ licenseKey, recordFound, storedStatus, rejectionReason }) {
+  console.info('[validate-license]', {
+    maskedSuffix: maskedLicenseSuffix(licenseKey),
+    storeName: STORE_NAME,
+    recordFound: Boolean(recordFound),
+    storedStatus: storedStatus || null,
+    rejectionReason: rejectionReason || null,
+  })
 }
 
 exports.handler = async (event) => {
@@ -27,12 +44,25 @@ exports.handler = async (event) => {
 
   const licenseKey = normalizeLicenseKey(typeof body.licenseKey === 'string' ? body.licenseKey : '')
   if (!isLicenseKeyFormat(licenseKey)) {
+    logValidationDiagnostics({
+      licenseKey,
+      recordFound: false,
+      storedStatus: null,
+      rejectionReason: 'invalid_format',
+    })
     return jsonResponse(200, { valid: false, tier: 'free' })
   }
 
   try {
     const record = await getLicenseByKey(licenseKey)
     const result = await evaluateLicenseRecord(record)
+
+    logValidationDiagnostics({
+      licenseKey,
+      recordFound: Boolean(record),
+      storedStatus: record?.status || null,
+      rejectionReason: result.valid ? null : result.rejectionReason || result.status || 'invalid',
+    })
 
     return jsonResponse(200, {
       valid: result.valid,
@@ -41,7 +71,13 @@ exports.handler = async (event) => {
       status: result.status || null,
     })
   } catch (error) {
-    console.error('validate-license failed', error)
+    logValidationDiagnostics({
+      licenseKey,
+      recordFound: false,
+      storedStatus: null,
+      rejectionReason: 'server_error',
+    })
+    console.error('validate-license failed', error instanceof Error ? error.message : String(error))
     return jsonResponse(500, { error: 'Unable to validate license' })
   }
 }

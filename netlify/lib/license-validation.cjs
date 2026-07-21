@@ -26,7 +26,7 @@ async function resolveStripeSubscriptionStatus(stripeSubscriptionId) {
 
 async function evaluateLicenseRecord(record) {
   if (!record) {
-    return { valid: false, tier: 'free' }
+    return { valid: false, tier: 'free', rejectionReason: 'record_not_found' }
   }
 
   if (isLicenseRecordRevoked(record.status)) {
@@ -34,6 +34,7 @@ async function evaluateLicenseRecord(record) {
       valid: false,
       tier: 'free',
       status: record.status,
+      rejectionReason: `revoked_status:${record.status}`,
     }
   }
 
@@ -44,7 +45,12 @@ async function evaluateLicenseRecord(record) {
   if (record.stripeSubscriptionId) {
     const subscription = await resolveStripeSubscriptionStatus(record.stripeSubscriptionId)
     if (!subscription) {
-      return { valid: false, tier: 'free', status: 'missing_subscription' }
+      return {
+        valid: false,
+        tier: 'free',
+        status: 'missing_subscription',
+        rejectionReason: 'missing_subscription',
+      }
     }
 
     status = subscription.status
@@ -57,6 +63,7 @@ async function evaluateLicenseRecord(record) {
         tier: 'free',
         status,
         expiresAt,
+        rejectionReason: `subscription_inactive:${status}`,
       }
     }
   } else if (record.status !== 'active') {
@@ -65,6 +72,7 @@ async function evaluateLicenseRecord(record) {
       tier: 'free',
       status,
       expiresAt,
+      rejectionReason: `inactive_status:${status}`,
     }
   }
 
@@ -76,6 +84,7 @@ async function evaluateLicenseRecord(record) {
         tier: 'free',
         status: 'expired',
         expiresAt,
+        rejectionReason: 'expired',
       }
     }
   }
@@ -86,6 +95,7 @@ async function evaluateLicenseRecord(record) {
     status,
     expiresAt,
     stripeActive,
+    rejectionReason: null,
   }
 }
 

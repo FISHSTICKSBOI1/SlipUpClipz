@@ -15,21 +15,23 @@ export const LICENSE_REVALIDATION_INTERVAL_MS = 12 * 60 * 60 * 1000
 /** Network timeout for license validation requests. */
 export const LICENSE_REQUEST_TIMEOUT_MS = 15_000
 
+/**
+ * Packaged production builds always use the production HTTPS endpoint.
+ * Localhost / env overrides are only allowed when the app is unpackaged (dev).
+ */
 export function getLicenseValidateUrl(isPackaged: boolean): string {
-  const override = process.env.SLIPUPCLIP_VALIDATE_URL?.trim()
+  if (isPackaged) {
+    return LICENSE_VALIDATE_URL_PRODUCTION
+  }
+
+  const override =
+    process.env.SLIPUPCLIP_VALIDATE_URL?.trim() ||
+    process.env.SLIPUPCLIP_DEV_VALIDATE_URL?.trim()
   if (override) {
     return override
   }
 
-  if (!isPackaged) {
-    const devOverride = process.env.SLIPUPCLIP_DEV_VALIDATE_URL?.trim()
-    if (devOverride) {
-      return devOverride
-    }
-    return LICENSE_VALIDATE_URL_DEVELOPMENT
-  }
-
-  return LICENSE_VALIDATE_URL_PRODUCTION
+  return LICENSE_VALIDATE_URL_DEVELOPMENT
 }
 
 export function assertLicenseEndpointSecure(url: string, isPackaged: boolean): void {
@@ -42,5 +44,9 @@ export function assertLicenseEndpointSecure(url: string, isPackaged: boolean): v
 
   if (isPackaged && parsed.protocol !== 'https:') {
     throw new Error('License validation requires HTTPS in production builds')
+  }
+
+  if (isPackaged && parsed.hostname !== 'slipupclipz.com') {
+    throw new Error('License validation must use slipupclipz.com in production builds')
   }
 }

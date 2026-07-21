@@ -51,6 +51,8 @@ export async function activateLicense(key: string): Promise<ActivateResult> {
     return { ok: false, error: 'Invalid license key.' }
   }
 
+  // Production / Stripe-issued keys must be verified by the server.
+  // Never accept an unverified key, and never use checksum activation when packaged.
   const serverResult = await validateLicenseWithServer(normalized)
   if (serverResult.ok) {
     return { ok: true, license: serverResult.license }
@@ -65,6 +67,7 @@ export async function activateLicense(key: string): Promise<ActivateResult> {
     return { ok: false, error: serverResult.message }
   }
 
+  // Legacy/dev checksum keys are allowed only in unpackaged development builds.
   if (!app.isPackaged && isDevDemoLicenseKey(normalized)) {
     console.info('[license] Activated development demo key', redactLicenseKey(normalized))
     return {
