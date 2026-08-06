@@ -47,12 +47,16 @@ export function PricingPage() {
           <div className="mx-auto mt-12 max-w-4xl">
             <PricingCards />
           </div>
-          <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-slate-500">
+          <p className="mx-auto mt-6 max-w-2xl text-center text-sm text-slate-500">
+            SlipUpClipz is available through the Microsoft Store and as a direct Windows download.
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-500">
             Windows only. See the{' '}
             <a href={SITE.paths.refund} className="text-glow-magenta hover:underline">
               Refund Policy
             </a>{' '}
-            for purchase details. Promotion codes can be entered on the Stripe Checkout page.
+            for purchase details. Promotion codes can be entered on the Stripe Checkout page. Pro
+            licenses are purchased through Stripe on this site, not through Microsoft Store.
           </p>
 
           <div className="mx-auto mt-16 max-w-4xl">

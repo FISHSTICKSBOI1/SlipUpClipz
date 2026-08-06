@@ -2,6 +2,11 @@ import type { FaqItem } from '../components/FaqAccordion'
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
+    question: 'Where can I download SlipUpClipz?',
+    answer:
+      'You can install SlipUpClipz through the Microsoft Store or download the latest Windows installer directly from SlipUpClipz.com. Both versions provide the same core app and Pro license support.',
+  },
+  {
     question: 'What does SlipUpClipz record?',
     answer:
       'SlipUpClipz keeps a short rolling replay buffer of the audio sources you select — typically microphone, game, Discord, or system audio depending on your setup. It captures recent audio for clipping, not long continuous recordings by default.',
@@ -59,7 +64,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'How do automatic updates work?',
     answer:
-      'Installed builds can check GitHub Releases for a newer version, download it in the background, and ask you to restart to install. You can also check manually in Settings → Updates.',
+      'Microsoft Store installs receive updates through the Store. Direct-download builds can check GitHub Releases for a newer version, download it in the background, and ask you to restart to install. You can also check manually in Settings → Updates.',
   },
   {
     question: 'Where are clips stored?',

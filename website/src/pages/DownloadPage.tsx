@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Button } from '../components/Button'
+import { MicrosoftStoreButton } from '../components/MicrosoftStoreButton'
 import { SectionHeading } from '../components/SectionHeading'
 import { Seo } from '../components/Seo'
 import { SITE } from '../config/site'
@@ -9,19 +10,65 @@ export function DownloadPage() {
     <>
       <Seo
         title="Download"
-        description="Download SlipUpClipz for Windows 10/11. Installer size, requirements, VB-Cable notes, and SmartScreen guidance."
+        description="Download SlipUpClipz for Windows 10/11 from the Microsoft Store or as a direct installer. Installer size, requirements, VB-Cable notes, and SmartScreen guidance."
         path={SITE.paths.download}
       />
       <section className="site-container py-14 sm:py-20">
         <SectionHeading
           eyebrow="Download"
           title="Get SlipUpClipz for Windows"
-          description="Grab the latest installer and start clipping in minutes."
+          description="Install from the Microsoft Store or grab the latest installer and start clipping in minutes."
         />
+
+        <div className="mt-10">
+          <h2 className="font-display text-xl font-semibold text-white sm:text-2xl">
+            Choose your download
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">
+            Both options give you the same core SlipUpClipz app and Pro license support.
+          </p>
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
+            <div className="panel flex flex-col p-6 sm:p-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-glow-magenta">
+                Recommended
+              </p>
+              <h3 className="mt-2 font-display text-lg font-semibold text-white">
+                Microsoft Store
+              </h3>
+              <ul className="mt-4 flex-1 space-y-2 text-sm text-slate-400">
+                <li>Easiest installation on Windows 10 &amp; 11</li>
+                <li>Updates are delivered through Microsoft Store</li>
+                <li>Install from a trusted Store listing</li>
+              </ul>
+              <div className="mt-6">
+                <MicrosoftStoreButton className="w-full sm:w-auto" variant="primary" />
+              </div>
+            </div>
+
+            <div className="panel flex flex-col p-6 sm:p-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Direct download
+              </p>
+              <h3 className="mt-2 font-display text-lg font-semibold text-white">
+                Windows installer
+              </h3>
+              <ul className="mt-4 flex-1 space-y-2 text-sm text-slate-400">
+                <li>Downloads the latest installer from SlipUpClipz.com / GitHub Releases</li>
+                <li>NSIS Setup (.exe) for Windows 10 / 11 (x64)</li>
+                <li>Same Pro license support as the Store version</li>
+              </ul>
+              <div className="mt-6">
+                <Button href={SITE.downloadUrl} className="btn-lift w-full sm:w-auto">
+                  Download for Windows
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="panel p-6 sm:p-8">
-            <p className="text-sm text-slate-400">Latest version</p>
+            <p className="text-sm text-slate-400">Latest direct download</p>
             <p className="mt-1 font-display text-3xl font-bold text-white">
               v{SITE.currentVersion}
             </p>
@@ -49,7 +96,7 @@ export function DownloadPage() {
                     href={SITE.releasesUrl}
                     className="text-glow-magenta hover:underline"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                   >
                     GitHub
                   </a>
@@ -84,8 +131,11 @@ export function DownloadPage() {
                 Installation steps
               </h2>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-400">
-                <li>Download the Setup .exe from the button above.</li>
-                <li>Run the installer and follow the prompts.</li>
+                <li>
+                  Install from the Microsoft Store, or download the Setup .exe from the button
+                  above.
+                </li>
+                <li>For the direct installer, run the .exe and follow the prompts.</li>
                 <li>Launch SlipUpClipz and complete the guided tour.</li>
                 <li>Pick your mic, replay source, and Clip hotkey.</li>
               </ol>
@@ -107,7 +157,7 @@ export function DownloadPage() {
               href={SITE.vbAudioUrl}
               className="mt-4 inline-flex text-sm font-semibold text-glow-cyan hover:underline"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               VB-Audio Virtual Cable →
             </a>
@@ -117,9 +167,9 @@ export function DownloadPage() {
               Windows SmartScreen
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
-              If the app is not fully code-signed yet, Windows may show a SmartScreen warning. When
-              you downloaded from this site or the official GitHub release, choose More info → Run
-              anyway. A signing certificate will reduce these prompts later.
+              If the app is not fully code-signed yet, Windows may show a SmartScreen warning on the
+              direct installer. When you downloaded from this site or the official GitHub release,
+              choose More info → Run anyway. Microsoft Store installs avoid this prompt.
             </p>
           </div>
         </div>

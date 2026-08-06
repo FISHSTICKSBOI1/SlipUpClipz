@@ -7,6 +7,12 @@ export const SITE = {
   websiteUrl: 'https://slipupclipz.com',
   downloadUrl: '/.netlify/functions/download-latest',
   releasesUrl: 'https://github.com/FISHSTICKSBOI1/SlipUpClipz/releases/latest',
+  /**
+   * Official Microsoft Store product page (web URL).
+   * Use this for all website Store CTAs — do not hardcode the URL in components.
+   */
+  microsoftStoreUrl:
+    'https://apps.microsoft.com/detail/9N89SSLR9769?hl=en-us&gl=US&ocid=pdpshare',
   currentVersion: '0.1.4',
   installerSizeLabel: '~82.4 MB',
   checkoutEndpoint: '/.netlify/functions/create-checkout',

@@ -15,6 +15,9 @@
     "verify:release": "node scripts/verify-release.mjs",
     "package": "npm run build && electron-builder --win --publish never",
     "package:dir": "npm run build && electron-builder --win --dir",
+    "package:msix": "node scripts/package-msix.mjs",
+    "verify:msix": "node scripts/verify-msix.mjs",
+    "package:win-all": "npm run build && electron-builder --win nsis appx --x64 --publish never",
     "release": "npm run preflight:release && npm run release:clean && npm run build && electron-builder --win --publish always && npm run verify:release",
     "license:demo": "node scripts/generate-license.mjs",
     "test:license": "npx tsx --test electron/licenseLogic.test.ts",
@@ -109,6 +112,28 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico"
+    },
+    "appx": {
+      "identityName": "SlipUpClipzLLC.SlipUpClipz",
+      "applicationId": "SlipUpClipz",
+      "publisher": "CN=3B960933-E78C-4110-B2BE-9718E5AB5729",
+      "publisherDisplayName": "SlipUpClipz LLC",
+      "displayName": "SlipUpClipz",
+      "languages": [
+        "en-US"
+      ],
+      "backgroundColor": "#1C1C1C",
+      "showNameOnTiles": true,
+      "setBuildNumber": true,
+      "minVersion": "10.0.17763.0",
+      "maxVersionTested": "10.0.22621.0",
+      "addAutoLaunchExtension": false,
+      "capabilities": [
+        "runFullTrust",
+        "internetClient",
+        "microphone"
+      ],
+      "artifactName": "${productName}-${version}.${ext}"
     }
   }
 }

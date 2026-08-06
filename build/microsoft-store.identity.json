@@ -1,0 +1,9 @@
+{
+  "identityName": "SlipUpClipzLLC.SlipUpClipz",
+  "applicationId": "SlipUpClipz",
+  "publisherDisplayName": "SlipUpClipz LLC",
+  "displayName": "SlipUpClipz",
+  "publisher": "CN=3B960933-E78C-4110-B2BE-9718E5AB5729",
+  "storePackageVersion": "1.0.5",
+  "_comment": "Exact Microsoft Partner Center Product Identity values. storePackageVersion is AppX Identity Major.Minor.Patch (revision 0 is appended). Public package.json / NSIS stay at 0.1.5."
+}

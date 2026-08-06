@@ -33,6 +33,7 @@ type ButtonAsAnchor = CommonProps & {
   to?: undefined
   target?: string
   rel?: string
+  'aria-label'?: string
 }
 
 export function Button(props: ButtonAsButton | ButtonAsLink | ButtonAsAnchor) {
@@ -48,12 +49,14 @@ export function Button(props: ButtonAsButton | ButtonAsLink | ButtonAsAnchor) {
   }
 
   if ('href' in props && props.href) {
+    const { href, target, rel, 'aria-label': ariaLabel } = props
     return (
       <a
-        href={props.href}
+        href={href}
         className={classes}
-        target={props.target}
-        rel={props.rel ?? (props.target === '_blank' ? 'noreferrer' : undefined)}
+        target={target}
+        rel={rel ?? (target === '_blank' ? 'noopener noreferrer' : undefined)}
+        aria-label={ariaLabel}
       >
         {children}
       </a>

@@ -245,6 +245,19 @@ export function setupAutoUpdater(getWindow: GetMainWindow): void {
     return
   }
 
+  // Microsoft Store builds are updated by the Store, not electron-updater / GitHub Releases.
+  const windowsStore = Boolean(
+    (process as NodeJS.Process & { windowsStore?: boolean }).windowsStore,
+  )
+  if (windowsStore) {
+    console.info('[autoUpdater] Skipping GitHub updates for Microsoft Store build')
+    setState({
+      status: 'up-to-date',
+      canInstall: false,
+    })
+    return
+  }
+
   wireAutoUpdaterEvents()
 
   const window = getWindow()

@@ -3,6 +3,10 @@ dist
 dist-electron
 *.local
 release/
+release-msix/
+release-build/
 dist-website/
+*.pfx
+*.cer
 # Local Netlify folder
 .netlify

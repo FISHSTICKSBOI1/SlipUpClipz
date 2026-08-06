@@ -54,13 +54,18 @@ export const HELP_ARTICLES: HelpArticle[] = [
     slug: 'installing-slipupclipz',
     category: 'getting-started',
     title: 'Installing SlipUpClipz',
-    summary: 'Download the Windows installer and complete setup.',
+    summary: 'Install from the Microsoft Store or the Windows installer.',
     screenshotLabel: 'Installer welcome screen',
     steps: [
-      'Download the latest SlipUpClipz Setup installer from the Download page or GitHub Releases.',
-      'Run the .exe. If SmartScreen appears, choose More info → Run anyway when you trust the source.',
-      'Follow the NSIS installer prompts and finish installation.',
+      'Choose an installation option: Microsoft Store (recommended for easiest updates) or the direct Windows installer from the Download page / GitHub Releases.',
+      'Microsoft Store: open the SlipUpClipz listing and select Get / Install.',
+      'Direct download: download the latest SlipUpClipz Setup .exe, then run it. If SmartScreen appears, choose More info → Run anyway when you trust the source.',
+      'Follow any installer prompts and finish installation.',
       'Launch SlipUpClipz from the Start Menu or desktop shortcut.',
+    ],
+    tips: [
+      'Both the Microsoft Store and direct-download versions support the same core app and Pro license activation.',
+      'Store installs receive updates through Microsoft Store; direct installs can update via the in-app updater when available.',
     ],
   },
   {

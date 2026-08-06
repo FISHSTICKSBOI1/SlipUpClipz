@@ -3,10 +3,12 @@ import { BottomCta } from '../components/BottomCta'
 import { Button } from '../components/Button'
 import { ComparisonTable } from '../components/ComparisonTable'
 import { DemoSection, openDemoVideo } from '../components/DemoSection'
+import { MicrosoftStoreButton } from '../components/MicrosoftStoreButton'
 import { PricingCards } from '../components/PricingCards'
 import { ScreenshotFrame } from '../components/ScreenshotFrame'
 import { SectionHeading } from '../components/SectionHeading'
 import { Seo } from '../components/Seo'
+import { StoreTrustCard } from '../components/StoreTrustCard'
 import { WorkflowDemo } from '../components/WorkflowDemo'
 import { AiSupportAssistant } from '../components/AiSupportAssistant'
 import { SITE } from '../config/site'
@@ -34,15 +36,24 @@ export function HomePage() {
               SlipUpClipz captures the last few seconds of game, Discord, or microphone audio, lets
               you trim the best part, and replay it instantly through your soundboard.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button href={SITE.downloadUrl} className="btn-lift">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Button href={SITE.downloadUrl} className="btn-lift w-full sm:w-auto">
                 Download for Windows
               </Button>
-              <Button type="button" variant="secondary" className="btn-lift" onClick={openDemoVideo}>
+              <MicrosoftStoreButton className="w-full sm:w-auto" />
+              <Button
+                type="button"
+                variant="secondary"
+                className="btn-lift w-full sm:w-auto"
+                onClick={openDemoVideo}
+              >
                 Watch Demo
               </Button>
             </div>
-            <ul className="mt-8 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
+            <p className="mt-4 text-sm text-slate-500">
+              Available on Microsoft Store • Windows 10 &amp; 11 • Secure checkout
+            </p>
+            <ul className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
               <li>Windows 10/11</li>
               <li>Free version available</li>
               <li>$4.99/year Pro</li>
@@ -59,6 +70,8 @@ export function HomePage() {
           />
         </div>
       </section>
+
+      <StoreTrustCard />
 
       <div id="demo">
         <DemoSection />

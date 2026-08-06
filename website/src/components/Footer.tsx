@@ -42,6 +42,17 @@ export function Footer() {
           <Button href={SITE.downloadUrl} className="btn-lift mt-5 !px-4 !py-2.5 !text-xs">
             Download for Windows
           </Button>
+          <p className="mt-3">
+            <a
+              href={SITE.microsoftStoreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Get SlipUpClipz on Microsoft Store (opens in a new tab)"
+              className="text-xs font-medium text-slate-400 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-glow-purple"
+            >
+              Get SlipUpClipz on Microsoft Store
+            </a>
+          </p>
           <p className="mt-5 text-xs text-slate-500">
             Version {SITE.currentVersion} · Windows 10/11
           </p>
