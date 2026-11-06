@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from subprocess import PIPE, Popen, TimeoutExpired
 from unittest.mock import patch
 import json
 import os
+import sys
 import tempfile
 import time
 import unittest
@@ -105,14 +107,91 @@ class TempOutputTests(unittest.TestCase):
             self.assertEqual(removed, [])
             self.assertTrue(locked.exists())
 
+            child = self._start_idle_child()
             claim = Path(folder) / temps.WORKER_CLAIM_NAME
             claim.write_text(
-                json.dumps({"ownerPid": os.getppid(), "workerPid": os.getppid()}),
+                json.dumps({"ownerPid": child.pid, "workerPid": child.pid}),
                 encoding="utf-8",
             )
-            removed = temps.recover_orphan_session_temps(output_dir)
+            with self._guard_process_signals():
+                removed = temps.recover_orphan_session_temps(output_dir)
             self.assertEqual(removed, [])
             self.assertTrue(locked.exists())
+
+    def test_live_process_blocks_cleanup_and_exited_process_allows_it(self) -> None:
+        child = self._start_idle_child()
+        with self._guard_process_signals():
+            self.assertTrue(temps.pid_is_alive(child.pid))
+        with tempfile.TemporaryDirectory() as folder:
+            output_dir = Path(folder) / "outputs"
+            output_dir.mkdir()
+            old = output_dir / f"tmp-{self.other}-{uuid.uuid4().hex}.wav"
+            recent = output_dir / f"tmp-{self.session}-{self.token}.wav"
+            old.write_bytes(b"RIFF")
+            recent.write_bytes(b"RIFF")
+            os.utime(old, (self._old_mtime(), self._old_mtime()))
+            claim = Path(folder) / temps.WORKER_CLAIM_NAME
+            claim.write_text(json.dumps({"ownerPid": child.pid, "workerPid": child.pid}), encoding="utf-8")
+            with self._guard_process_signals():
+                self.assertEqual(temps.recover_orphan_session_temps(output_dir), [])
+            self.assertTrue(old.exists())
+            self.assertTrue(recent.exists())
+
+            self._finish_child(child)
+            with self._guard_process_signals():
+                self.assertFalse(temps.pid_is_alive(child.pid))
+                removed = temps.recover_orphan_session_temps(output_dir)
+            self.assertEqual(removed, [old.name])
+            self.assertFalse(old.exists())
+            self.assertTrue(recent.exists())
+
+    def test_unknown_process_status_skips_orphan_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            output_dir = Path(folder) / "outputs"
+            output_dir.mkdir()
+            old = output_dir / f"tmp-{self.other}-{uuid.uuid4().hex}.wav"
+            old.write_bytes(b"RIFF")
+            os.utime(old, (self._old_mtime(), self._old_mtime()))
+            claim = Path(folder) / temps.WORKER_CLAIM_NAME
+            claim.write_text(json.dumps({"ownerPid": 424242, "workerPid": 424242}), encoding="utf-8")
+            with patch.object(temps, "_query_pid_is_alive", side_effect=OSError("unavailable")):
+                self.assertTrue(temps.pid_is_alive(424242))
+                removed = temps.recover_orphan_session_temps(output_dir)
+            self.assertEqual(removed, [])
+            self.assertTrue(old.exists())
+
+    def test_non_positive_pid_is_not_treated_as_alive(self) -> None:
+        with patch.object(temps, "_query_pid_is_alive", side_effect=AssertionError("queried")):
+            self.assertFalse(temps.pid_is_alive(0))
+            self.assertFalse(temps.pid_is_alive(-4))
+            self.assertFalse(temps.pid_is_alive(True))  # type: ignore[arg-type]
+
+    def _start_idle_child(self) -> Popen[bytes]:
+        proc = Popen([sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=PIPE)
+        self.addCleanup(self._finish_child, proc)
+        return proc
+
+    @staticmethod
+    def _finish_child(proc: Popen[bytes]) -> None:
+        if proc.poll() is not None:
+            return
+        if proc.stdin is not None and not proc.stdin.closed:
+            proc.stdin.close()
+        try:
+            proc.wait(timeout=15)
+        except TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=15)
+
+    def _guard_process_signals(self):
+        original = temps.os.kill
+
+        def guarded(pid: int, sig: int, *_args: object, **_kwargs: object) -> None:
+            if os.name == "nt" or sig != 0:
+                raise AssertionError(f"liveness check signaled process {pid} with {sig}")
+            original(pid, sig)
+
+        return patch.object(temps.os, "kill", guarded)
 
 
 if __name__ == "__main__":

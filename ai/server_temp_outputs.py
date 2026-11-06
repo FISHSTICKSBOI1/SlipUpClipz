@@ -92,16 +92,81 @@ def unlink_owned_temp(path: Path, output_dir: Path, session_id: str = "") -> boo
         return False
 
 
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_STILL_ACTIVE = 259
+_ERROR_INVALID_PARAMETER = 87
+
+
 def pid_is_alive(pid: int) -> bool:
-    if pid <= 0:
+    """Whether pid is still running.
+
+    An unknown result means the worker may still be active. On Windows this
+    only queries process status. os.kill(pid, 0) is CTRL_C_EVENT there, and
+    every other signal value is TerminateProcess.
+    """
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
         return False
     try:
-        os.kill(pid, 0)
+        return _query_pid_is_alive(pid)
+    except OSError:
         return True
+
+
+def _query_pid_is_alive(pid: int) -> bool:
+    if os.name == "nt":
+        return _windows_pid_is_running(pid)
+    return _unix_pid_is_running(pid)
+
+
+def _unix_pid_is_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
     except PermissionError:
         return True
-    except OSError:
-        return False
+    return True
+
+
+def _windows_pid_is_running(pid: int) -> bool:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    open_process = ctypes.WINFUNCTYPE(
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.BOOL,
+        wintypes.DWORD,
+        use_last_error=True,
+    )(("OpenProcess", kernel32))
+    get_exit_code = ctypes.WINFUNCTYPE(
+        wintypes.BOOL,
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.DWORD),
+        use_last_error=True,
+    )(("GetExitCodeProcess", kernel32))
+    close_handle = ctypes.WINFUNCTYPE(
+        wintypes.BOOL,
+        wintypes.HANDLE,
+        use_last_error=True,
+    )(("CloseHandle", kernel32))
+
+    try:
+        handle = open_process(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    except (OverflowError, ctypes.ArgumentError) as error:
+        raise OSError("Could not query process status") from error
+    if not handle:
+        if ctypes.get_last_error() == _ERROR_INVALID_PARAMETER:
+            return False
+        raise OSError(ctypes.get_last_error(), "Could not query process status")
+    try:
+        code = wintypes.DWORD()
+        if not get_exit_code(handle, ctypes.byref(code)):
+            raise OSError(ctypes.get_last_error(), "Could not read process exit code")
+        return code.value == _STILL_ACTIVE
+    finally:
+        close_handle(handle)
 
 
 def other_active_worker_holds_claim(output_dir: Path) -> bool:
