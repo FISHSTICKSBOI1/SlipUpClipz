@@ -4,14 +4,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppSettings } from './AppSettingsContext'
+import { useLicense } from './LicenseContext'
 import {
-  ONBOARDING_TOUR_STEPS,
   ONBOARDING_TOUR_VERSION,
+  tourStepsFor,
   type TourStep,
   type TourStepId,
 } from '../lib/onboardingTour'
@@ -38,14 +40,18 @@ const OnboardingTourContext = createContext<OnboardingTourContextValue | null>(n
 export function OnboardingTourProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const { settings, isLoading, updateSettings } = useAppSettings()
+  const { isPro, isLoading: licenseLoading } = useLicense()
   const [isActive, setIsActive] = useState(false)
+  const [steps, setSteps] = useState(() => tourStepsFor(false))
+  const stepsRef = useRef(steps)
+  stepsRef.current = steps
   const [stepIndex, setStepIndex] = useState(0)
   const [hotkeyAcknowledged, setHotkeyAcknowledged] = useState(false)
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false)
   const [hasAutoStarted, setHasAutoStarted] = useState(false)
   const [hotkeyBaseline, setHotkeyBaseline] = useState<string | null>(null)
 
-  const step = isActive ? ONBOARDING_TOUR_STEPS[stepIndex] ?? null : null
+  const step = isActive ? steps[stepIndex] ?? null : null
 
   const persistCompleted = useCallback(async () => {
     await updateSettings({ onboardingCompletedVersion: ONBOARDING_TOUR_VERSION })
@@ -53,7 +59,7 @@ export function OnboardingTourProvider({ children }: { children: ReactNode }) {
 
   const goToStep = useCallback(
     (index: number) => {
-      const next = ONBOARDING_TOUR_STEPS[index]
+      const next = stepsRef.current[index]
       if (!next) return
       setStepIndex(index)
       setHotkeyAcknowledged(false)
@@ -67,11 +73,14 @@ export function OnboardingTourProvider({ children }: { children: ReactNode }) {
   )
 
   const startTour = useCallback(() => {
+    const nextSteps = tourStepsFor(isPro)
+    stepsRef.current = nextSteps
+    setSteps(nextSteps)
     setIsActive(true)
     setExitConfirmOpen(false)
     setHotkeyAcknowledged(false)
     setStepIndex(0)
-  }, [])
+  }, [isPro])
 
   const endTour = useCallback(async () => {
     setIsActive(false)
@@ -104,7 +113,7 @@ export function OnboardingTourProvider({ children }: { children: ReactNode }) {
     }
 
     const nextIndex = stepIndex + 1
-    if (nextIndex >= ONBOARDING_TOUR_STEPS.length) {
+    if (nextIndex >= stepsRef.current.length) {
       void finishTour()
       return
     }
@@ -147,12 +156,12 @@ export function OnboardingTourProvider({ children }: { children: ReactNode }) {
   ])
 
   useEffect(() => {
-    if (isLoading || hasAutoStarted) return
+    if (isLoading || licenseLoading || hasAutoStarted) return
     setHasAutoStarted(true)
     if (settings.onboardingCompletedVersion < ONBOARDING_TOUR_VERSION) {
       startTour()
     }
-  }, [hasAutoStarted, isLoading, settings.onboardingCompletedVersion, startTour])
+  }, [hasAutoStarted, isLoading, licenseLoading, settings.onboardingCompletedVersion, startTour])
 
   useEffect(() => {
     if (!isActive || !step?.route) return

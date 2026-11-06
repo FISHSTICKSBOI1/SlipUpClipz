@@ -63,9 +63,14 @@ export function Button(props: ButtonAsButton | ButtonAsLink | ButtonAsAnchor) {
     )
   }
 
-  const { type = 'button', ...rest } = props as ButtonAsButton
+  const buttonProps = { ...(props as ButtonAsButton) }
+  const type = buttonProps.type ?? 'button'
+  delete buttonProps.type
+  delete buttonProps.className
+  delete buttonProps.variant
+  delete buttonProps.children
   return (
-    <button type={type} className={classes} {...rest}>
+    <button type={type} className={classes} {...buttonProps}>
       {children}
     </button>
   )

@@ -1,13 +1,27 @@
 import type { ClipCategory } from '../types/clip'
 
 const STORAGE_KEY = 'slipupclipz-categories'
+let categoriesUnreadable = false
+
+export function categoriesLoadError(): string | null {
+  return categoriesUnreadable
+    ? 'Saved clip categories could not be read. They were left on this PC and were not replaced.'
+    : null
+}
 
 export function loadCategories(): ClipCategory[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
+    if (!raw) {
+      categoriesUnreadable = false
+      return []
+    }
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {
+      categoriesUnreadable = true
+      return []
+    }
+    categoriesUnreadable = false
     return parsed
       .filter(
         (entry): entry is ClipCategory =>
@@ -24,10 +38,12 @@ export function loadCategories(): ClipCategory[] {
         createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : Date.now(),
       }))
   } catch {
+    categoriesUnreadable = true
     return []
   }
 }
 
 export function saveCategories(categories: ClipCategory[]): void {
+  if (categoriesUnreadable) return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(categories))
 }

@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage'
 import { HowItWorksPage } from './pages/HowItWorksPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PricingPage } from './pages/PricingPage'
+import { CookiesPage } from './pages/CookiesPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { RefundPage } from './pages/RefundPage'
 import { TermsPage } from './pages/TermsPage'
@@ -33,6 +34,7 @@ export function App() {
         <Route path={SITE.paths.privacy} element={<PrivacyPage />} />
         <Route path={SITE.paths.terms} element={<TermsPage />} />
         <Route path={SITE.paths.refund} element={<RefundPage />} />
+        <Route path={SITE.paths.cookies} element={<CookiesPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

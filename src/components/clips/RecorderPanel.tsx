@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import type { ReplayAudioSource } from '@shared/appTypes'
+import { canCaptureClip } from '@shared/replayCapture'
 import {
   DEFAULT_BUFFER_SECONDS,
   MAX_BUFFER_SECONDS,
-  MIC_TEST_SECONDS,
   MIN_BUFFER_SECONDS,
 } from '../../hooks/useReplayBuffer'
 import { useAppSettings } from '../../context/AppSettingsContext'
@@ -68,12 +68,15 @@ export function RecorderPanel() {
     microphoneLabel,
     micLevelPercent,
     isTestingMic,
+    micTestSecondsLeft,
+    microphoneNotice,
     micTestMessage,
     testMicrophone,
     error,
     editingClip,
     isSaving,
     lastSavedName,
+    saveError,
     clipHotkey,
     replayAudioSource,
     handleClip,
@@ -141,12 +144,12 @@ export function RecorderPanel() {
           </div>
         </div>
 
-        <div className="grid gap-6 px-5 py-5 lg:grid-cols-[1.1fr_0.9fr] sm:px-6">
+        <div className="recorder-capture gap-6 px-5 py-5 sm:px-6">
           <div className="flex flex-col items-center justify-center rounded-2xl border border-clip/20 bg-gradient-to-b from-clip/10 to-transparent px-6 py-8 text-center">
             <button
               type="button"
               onClick={() => void handleClip()}
-              disabled={!isListening || isSaving || isTestingMic}
+              disabled={!canCaptureClip({ isListening, isSaving, isTestingMic })}
               className="btn-clip min-w-[10rem]"
             >
               <ScissorsIcon className="h-5 w-5" />
@@ -207,8 +210,18 @@ export function RecorderPanel() {
                     className="btn-secondary !px-3 !py-2 !text-xs"
                   >
                     <MicrophoneIcon className="h-3.5 w-3.5" />
-                    {isTestingMic ? `Testing (${MIC_TEST_SECONDS}s)...` : 'Test Microphone'}
+                    {isTestingMic
+                      ? micTestSecondsLeft > 0
+                        ? `Testing (${micTestSecondsLeft}s)...`
+                        : 'Finishing test...'
+                      : 'Test Microphone'}
                   </button>
+                )}
+
+                {microphoneNotice && (
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                    {microphoneNotice}
+                  </p>
                 )}
 
                 {labels.showMicTest && micTestMessage && (
@@ -264,7 +277,7 @@ export function RecorderPanel() {
           </div>
         </div>
 
-        <div className="grid gap-4 border-t border-white/5 px-5 py-5 sm:grid-cols-2 sm:px-6">
+        <div className="recorder-tools gap-4 border-t border-white/5 px-5 py-5 sm:px-6">
           <div data-tour={TOUR_TARGET.clipHotkey} className="panel-inset p-4">
             <ClipHotkeyControl
               value={clipHotkey}
@@ -294,9 +307,10 @@ export function RecorderPanel() {
         <TrimEditor
           clipName={editingClip.name}
           blob={editingClip.blob}
-          onSave={(trimmed, name) => void handleSaveTrimmed(trimmed, name)}
+          onSave={(trimmed, name, options) => void handleSaveTrimmed(trimmed, name, options)}
           onCancel={handleCloseEditor}
           isSaving={isSaving}
+          saveError={saveError}
         />
       )}
     </div>

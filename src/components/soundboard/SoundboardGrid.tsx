@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FREE_SOUNDBOARD_PAD_LIMIT } from '@shared/appTypes'
+import { PRO_SOUNDBOARD_PAD_LIMIT, soundboardPadLimit } from '@shared/appTypes'
 import { useAppSettings } from '../../context/AppSettingsContext'
 import { useClipLibraryContext } from '../../context/ClipLibraryContext'
 import { useLicense } from '../../context/LicenseContext'
@@ -45,7 +45,7 @@ export function SoundboardGrid({
   } = useClipLibraryContext()
   const { settings } = useAppSettings()
   const { isPro } = useLicense()
-  const maxPads = isPro ? SOUNDBOARD_SLOT_COUNT : FREE_SOUNDBOARD_PAD_LIMIT
+  const maxPads = soundboardPadLimit(isPro)
   const {
     slottedClips,
     playableClips,
@@ -263,7 +263,7 @@ export function SoundboardGrid({
                 >
                   <span className="text-xs font-medium text-gray-500">Pro pads</span>
                   <span className="mt-1 text-[10px] text-gray-600">
-                    Unlock {SOUNDBOARD_SLOT_COUNT - maxPads} total
+                    {PRO_SOUNDBOARD_PAD_LIMIT} pads with Pro
                   </span>
                 </div>
               ))}

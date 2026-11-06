@@ -146,10 +146,10 @@ export async function analyzeBlobSamples(blob: Blob): Promise<MicSampleAnalysis>
       mimeType: blob.type,
     })
     return {
-      silent: true,
+      silent: false,
       peak: 0,
       rms: 0,
-      allZeros: true,
+      allZeros: false,
       sampleCount: 0,
       reason: 'decodeFailed',
     }
@@ -196,15 +196,24 @@ export function logMicSilenceAnalysis(
   })
 }
 
-export async function playBlobAudio(blob: Blob): Promise<void> {
+export async function playBlobAudio(blob: Blob, timeoutMs = 12_000): Promise<void> {
   const url = URL.createObjectURL(blob)
+  const budget = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 12_000
 
   try {
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve) => {
       const audio = new Audio(url)
-      audio.onended = () => resolve()
-      audio.onerror = () => reject(new Error('Playback failed'))
-      void audio.play().catch(reject)
+      const timer = window.setTimeout(() => {
+        audio.pause()
+        resolve()
+      }, budget)
+      const finish = () => {
+        window.clearTimeout(timer)
+        resolve()
+      }
+      audio.onended = finish
+      audio.onerror = finish
+      void audio.play().catch(finish)
     })
   } finally {
     URL.revokeObjectURL(url)

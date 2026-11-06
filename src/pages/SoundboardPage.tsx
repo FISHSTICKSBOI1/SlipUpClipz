@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SoundboardGrid, type SoundboardFilter } from '../components/soundboard/SoundboardGrid'
 import { SoundboardMixerControls } from '../components/soundboard/SoundboardMixerControls'
+import { SoundboardOutputStrip } from '../components/soundboard/SoundboardOutputStrip'
 import { VoiceEffectsControls } from '../components/soundboard/VoiceEffectsControls'
 import { VirtualAudioSetupPanel } from '../components/settings/VirtualAudioSetupPanel'
 import { useAppSettings } from '../context/AppSettingsContext'
-import { useClipLibraryContext } from '../context/ClipLibraryContext'
 import { useLicense } from '../context/LicenseContext'
-import { useActiveOutputDeviceLabel, useAudioOutputDevices } from '../hooks/useAudioOutputDevices'
+import { useAudioOutputDevices } from '../hooks/useAudioOutputDevices'
+import { useClipLibraryContext } from '../context/ClipLibraryContext'
 import { shouldIgnoreGlobalHotkey } from '../lib/hotkey'
 import { TOUR_TARGET } from '../lib/onboardingTour'
+import { importAudioBatch } from '../lib/importAudioBatch'
+import { soundboardLoadError } from '../lib/soundboardStorage'
 import { preloadClipAudioMany, warmUpAudioEngine } from '../lib/soundboardAudio'
-import { playToggleSound } from '../lib/uiSounds'
 import {
   ArrowUpTrayIcon,
   FolderIcon,
@@ -37,9 +39,8 @@ export function SoundboardPage() {
     stopAllSoundboard,
   } = useClipLibraryContext()
   const { isPro } = useLicense()
-  const { settings, updateSettings } = useAppSettings()
-  const { devices, hasVirtualOutput, isLoading: devicesLoading } = useAudioOutputDevices()
-  const activeOutputLabel = useActiveOutputDeviceLabel(devices, settings)
+  const { settings } = useAppSettings()
+  const { hasVirtualOutput, isLoading: devicesLoading } = useAudioOutputDevices()
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<SoundboardFilter>('all')
@@ -86,37 +87,16 @@ export function SoundboardPage() {
   }, [settings.stopAllHotkey, stopAllSoundboard])
 
   async function handleImportFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList)
-    if (files.length === 0) return
-
+    if (fileList.length === 0) return
     setImportError(null)
     setImportNotice(null)
-
-    for (const file of files) {
-      const result = await importAudioFile(file)
-      if (!result.ok) {
-        setImportError(result.error)
-        continue
-      }
-
-      if (result.duplicateOf) {
-        const confirmed = window.confirm(
-          `"${file.name}" looks like it was already imported as "${result.duplicateOf.name}". Import another copy anyway?`,
-        )
-        if (confirmed) {
-          const forced = await importAudioFile(file, { allowDuplicate: true })
-          if (!forced.ok) {
-            setImportError(forced.error)
-          } else {
-            setImportNotice(`Imported another copy of ${file.name}.`)
-          }
-        } else {
-          setImportNotice(`Skipped duplicate: ${file.name}`)
-        }
-      } else {
-        setImportNotice(`Imported ${result.clip.name}.`)
-      }
-    }
+    const result = await importAudioBatch(fileList, importAudioFile, (fileName, existingName) =>
+      window.confirm(
+        `"${fileName}" looks like it was already imported as "${existingName}". Import another copy anyway?`,
+      ),
+    )
+    setImportError(result.error)
+    setImportNotice(result.notice)
   }
 
   const categorySummary = useMemo(
@@ -130,7 +110,7 @@ export function SoundboardPage() {
 
   return (
     <div
-      className="mx-auto max-w-5xl space-y-6"
+      className="space-y-6"
       onDragEnter={(event) => {
         event.preventDefault()
         if (event.dataTransfer.types.includes('Files')) {
@@ -153,6 +133,11 @@ export function SoundboardPage() {
         }
       }}
     >
+      {soundboardLoadError() ? (
+        <p className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          {soundboardLoadError()}
+        </p>
+      ) : null}
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="page-title">Soundboard</h1>
@@ -206,37 +191,7 @@ export function SoundboardPage() {
             <VirtualAudioSetupPanel compact />
           </div>
         )}
-
-        <div className="control-strip">
-          <div className="stat-chip sm:col-span-2 xl:col-span-1">
-            <p className="control-label">Output</p>
-            <p className="mt-1 truncate text-sm font-medium text-white">
-              {isPro ? activeOutputLabel : 'Default device (Free)'}
-            </p>
-          </div>
-          <div className="stat-chip flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-3">
-            <div>
-              <p className="control-label">Hear myself</p>
-              <p className="helper-text mt-1">Monitor processed mic + pads locally</p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.hearMyself}
-              onClick={() => {
-                const nextValue = !settings.hearMyself
-                playToggleSound(nextValue)
-                void updateSettings({ hearMyself: nextValue })
-              }}
-              className={`toggle-track ${settings.hearMyself ? 'bg-accent' : 'bg-surface-border'}`}
-            >
-              <span
-                className={`toggle-thumb ${settings.hearMyself ? 'translate-x-5' : 'translate-x-0'}`}
-              />
-            </button>
-          </div>
-        </div>
-
+        <SoundboardOutputStrip />
         <SoundboardMixerControls />
       </section>
 
@@ -245,11 +200,9 @@ export function SoundboardPage() {
       </div>
 
       <section className="panel overflow-hidden">
-        <div className="border-b border-white/5 px-5 py-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <FolderIcon className="h-4 w-4 text-accent-hover" />
-            <h2 className="section-title">Categories</h2>
-          </div>
+        <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4 sm:px-6">
+          <FolderIcon className="h-4 w-4 text-accent-hover" />
+          <h2 className="section-title">Categories</h2>
         </div>
         <div className="space-y-3 px-5 py-4 sm:px-6">
           <div className="flex flex-wrap gap-2">
@@ -327,9 +280,7 @@ export function SoundboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-5 py-4 sm:px-6">
           <div>
             <h2 className="section-title">Pad grid</h2>
-            <p className="helper-text mt-1">
-              Drag pads to reorder. Scroll for up to 50 Pro pads.
-            </p>
+            <p className="helper-text mt-1">Drag pads to reorder. Scroll for up to 50 Pro pads.</p>
           </div>
           <span className="badge-accent">
             {hotkeyCount} hotkey{hotkeyCount === 1 ? '' : 's'}{' '}
@@ -363,12 +314,6 @@ export function SoundboardPage() {
               </button>
             ))}
           </div>
-
-          {!settings.hearMyself && settings.routeToVBCable && (
-            <p className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 helper-text">
-              Clips play to your configured output only. Enable Hear myself to monitor on speakers.
-            </p>
-          )}
 
           <div data-tour={TOUR_TARGET.soundboardPads}>
             <SoundboardGrid

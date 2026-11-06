@@ -1,6 +1,6 @@
 import { globalShortcut } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { CLIP_RECORD_ACCELERATOR, CLIP_RECORD_HOTKEY } from '../shared/appTypes.js'
+import { CLIP_RECORD_ACCELERATOR, CLIP_RECORD_HOTKEY, requiresProLicense } from '../shared/appTypes.js'
 import { isProLicense } from './license.js'
 import { getLicense, getSettings, type HotkeyBinding } from './store.js'
 
@@ -71,10 +71,13 @@ export function syncGlobalHotkeys(
   unregisterSoundboardHotkeys()
 
   const settings = getSettings()
-  const license = getLicense()
   const clipAccelerator = getClipHotkeyAccelerator()
 
-  if (!window || !settings.globalHotkeysEnabled || !isProLicense(license)) {
+  if (!window || !settings.globalHotkeysEnabled) {
+    return { registered: 0, failed: [] }
+  }
+
+  if (requiresProLicense('globalHotkeys') && !isProLicense(getLicense())) {
     return { registered: 0, failed: [] }
   }
 

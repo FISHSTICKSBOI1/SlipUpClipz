@@ -1,0 +1,21 @@
+v0.1.6 rollout order
+
+Do not publish GitHub latest.yml until Store customers can install 0.1.6 from the Microsoft Store.
+
+1. Keep LEGACY_DEVICE_GRACE_UNTIL unset. Older apps stay able to validate without a device id. Do not turn on the strict cutoff.
+2. Submit the signed MSIX 1.0.6.0 for the existing product 9N89SSLR9769. Do not change the package family or publisher.
+3. Wait until that package is certified and available in the Store. Publishing it does not mean every installed copy has updated. Windows checks for Store updates on its own schedule, often about once a day, and a customer can defer the update.
+4. Tell existing Store customers, including people who update weeks later, to open the Microsoft Store page for SlipUpClipz and choose Update. The installed v0.1.5 app cannot show the new Store button.
+5. Only after the Store package is available, publish the website NSIS installer and the checksum-verified AI component. Put the component URL into a new app build's pin before relying on the Download button. The current pin has no download URL, so a website build installs the component only from a file whose name, size, and SHA-256 match the pin.
+6. Update GitHub latest.yml only after step 5, and only to the signed NSIS installer named in that file. latest.yml must not point at a file that can be replaced later. electron-updater checks the SHA-512 in latest.yml.
+7. Leave the legacy grace period open until Store customers have had a real chance to update, not merely until the package is submitted. When you later set LEGACY_DEVICE_GRACE_UNTIL, use a date after that path is verified. Unset the variable to roll the cutoff back. Do not deploy that change early.
+
+If someone already installed the website app beside the Store app
+- They have two installations and two profiles.
+- Store clips remain in the Store package's virtualized app data. They are not in %APPDATA%\slipupclipz.
+- Open the Store app to use the original clips and license.
+- Uninstalling the website app does not delete its profile, and it does not remove the Store app.
+- Do not copy one profile over the other while either app is open.
+
+What v0.1.6 cannot change
+- The v0.1.5 Store binary already on a PC will still look at GitHub if latest.yml changes. No update to this repository changes that binary. The protection is the order above, not new code inside v0.1.5.

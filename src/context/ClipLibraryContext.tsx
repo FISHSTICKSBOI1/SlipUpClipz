@@ -5,22 +5,18 @@ import {
   useSoundboardHotkeys,
 } from '../hooks/useSoundboardHotkeys'
 import { useAppSettings } from './AppSettingsContext'
-import { useLicense } from './LicenseContext'
 
 const ClipLibraryContext = createContext<ClipLibrary | null>(null)
 
 function SoundboardHotkeyListener({ library }: { library: ClipLibrary }) {
-  const { isPro } = useLicense()
   const { settings } = useAppSettings()
-
-  const globalHotkeysAllowed = isPro && settings.globalHotkeysEnabled
 
   useSoundboardHotkeys(library.clips, library.playClipSoundboard, {
     enabled: settings.globalHotkeysEnabled,
-    useSystemGlobalHotkeys: globalHotkeysAllowed,
+    useSystemGlobalHotkeys: settings.globalHotkeysEnabled,
   })
 
-  useElectronHotkeyTrigger(library.playClipSoundboard, globalHotkeysAllowed)
+  useElectronHotkeyTrigger(library.playClipSoundboard, settings.globalHotkeysEnabled)
 
   return null
 }

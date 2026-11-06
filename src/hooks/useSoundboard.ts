@@ -9,6 +9,7 @@ import {
   type SoundboardState,
 } from '../lib/soundboardStorage'
 import { FREE_SOUNDBOARD_PAD_LIMIT } from '@shared/appTypes'
+import { clipLibraryUnreadableState } from '../lib/clipStorage'
 
 export function useSoundboard(clips: Clip[], maxPads = SOUNDBOARD_SLOT_COUNT) {
   const [state, setState] = useState<SoundboardState>(() => loadSoundboardState())
@@ -31,6 +32,7 @@ export function useSoundboard(clips: Clip[], maxPads = SOUNDBOARD_SLOT_COUNT) {
   }, [state])
 
   useEffect(() => {
+    if (clipLibraryUnreadableState()) return
     setState((prev) => {
       let changed = false
       const nextPads = prev.pads.map((pad) => {

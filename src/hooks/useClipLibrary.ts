@@ -16,8 +16,12 @@ import {
   saveAudioBlob,
 } from '../lib/audioStorage'
 import { loadCategories, saveCategories } from '../lib/categoryStorage'
+import {
+  applySuccessfulClipDeletion,
+  finalizeClipDeletion,
+} from '../lib/clipDeletion'
 import { loadClips, saveClips } from '../lib/clipStorage'
-import { loadSoundboardState } from '../lib/soundboardStorage'
+import { clearDeletedClipFromSoundboard, loadSoundboardState } from '../lib/soundboardStorage'
 import {
   invalidateClipAudio,
   playClipInstant,
@@ -38,6 +42,7 @@ export function useClipLibrary() {
   const [categories, setCategories] = useState<ClipCategory[]>(() => loadCategories())
   const [search, setSearch] = useState('')
   const [playingId, setPlayingId] = useState<string | null>(null)
+  const [libraryNotice, setLibraryNotice] = useState<string | null>(null)
   const playingIdRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -143,8 +148,13 @@ export function useClipLibrary() {
     )
   }, [])
 
-  const deleteClip = useCallback((id: string) => {
-    void deleteAudioBlob(id)
+  const deleteClip = useCallback(async (id: string) => {
+    const result = await finalizeClipDeletion({ id, deleteAudio: deleteAudioBlob })
+    if (!result.ok) {
+      setLibraryNotice(result.error)
+      return result
+    }
+
     invalidateClipAudio(id)
     stopClipInstant(id)
     if (playingIdRef.current === id) {
@@ -152,7 +162,10 @@ export function useClipLibrary() {
       playingIdRef.current = null
       setPlayingId(null)
     }
-    setClips((prev) => prev.filter((clip) => clip.id !== id))
+    setLibraryNotice(null)
+    clearDeletedClipFromSoundboard(id)
+    setClips((prev) => applySuccessfulClipDeletion(prev, id))
+    return result
   }, [])
 
   const toggleFavorite = useCallback((id: string) => {
@@ -181,20 +194,6 @@ export function useClipLibrary() {
         return clip
       }),
     )
-  }, [])
-
-  const addClip = useCallback((name: string) => {
-    const trimmed = name.trim()
-    if (!trimmed) return
-
-    const clip: Clip = {
-      id: crypto.randomUUID(),
-      name: trimmed,
-      createdAt: Date.now(),
-      durationMs: 2000,
-      source: 'recorded',
-    }
-    setClips((prev) => [clip, ...prev])
   }, [])
 
   const addClipFromRecording = useCallback(
@@ -227,7 +226,7 @@ export function useClipLibrary() {
   )
 
   const importAudioFile = useCallback(
-    async (file: File, options: { allowDuplicate?: boolean } = {}): Promise<ImportAudioResult> => {
+    async (file: File, options: { allowDuplicate?: boolean; aiGenerated?: boolean } = {}): Promise<ImportAudioResult> => {
       if (!isSupportedAudioFile(file)) {
         return {
           ok: false,
@@ -262,6 +261,7 @@ export function useClipLibrary() {
           source: 'imported',
           originalFileName: file.name,
           importFingerprint: fingerprint,
+          aiGenerated: options.aiGenerated ?? false,
         }
 
         setClips((prev) => [clip, ...prev])
@@ -408,6 +408,7 @@ export function useClipLibrary() {
     search,
     setSearch,
     playingId,
+    libraryNotice,
     playClip,
     playClipSoundboard,
     stopClipSoundboard,
@@ -417,7 +418,6 @@ export function useClipLibrary() {
     toggleFavorite,
     setClipCategory,
     assignHotkey,
-    addClip,
     addClipFromRecording,
     importAudioFile,
     replaceClipAudio,

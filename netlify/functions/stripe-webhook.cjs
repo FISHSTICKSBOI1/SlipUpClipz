@@ -5,6 +5,12 @@ const {
 } = require('../lib/affiliates.cjs')
 const { getStripe, jsonResponse, mapSubscriptionStatus } = require('../lib/commerce.cjs')
 const { sendLicenseEmail } = require('../lib/email.cjs')
+const { isHardRevoked } = require('../lib/license-validation.cjs')
+const {
+  planChargeRefund,
+  attachCancelResult,
+  cancelLicenseSubscription,
+} = require('../lib/refund-policy.cjs')
 const { claimStripeEvent, completeStripeEvent, failStripeEvent } = require('../lib/idempotency.cjs')
 const { generateUniqueLicenseKey } = require('../lib/license.cjs')
 const { maybeApprovePendingAffiliateCommission } = require('../lib/affiliate-commissions.cjs')
@@ -22,7 +28,6 @@ const {
   getLicenseByPaymentIntentId,
   recordAffiliateCommission,
 } = require('../lib/storage.cjs')
-
 function normalizeSecret(value) {
   return String(value || '')
     .trim()
@@ -96,7 +101,11 @@ async function handleCheckoutCompleted(stripe, session) {
 
   const existingBySub = await getLicenseBySubscriptionId(subscriptionId)
   if (existingBySub?.licenseKey) {
-    return { skipped: true, reason: 'license-already-issued', licenseKey: existingBySub.licenseKey }
+    if (existingBySub.emailSent) {
+      return { skipped: true, reason: 'license-already-issued', licenseKey: existingBySub.licenseKey }
+    }
+    await deliverLicenseEmail(existingBySub)
+    return { licenseKey: existingBySub.licenseKey, emailSent: true, retried: true }
   }
 
   const fullSession = await getExpandedCheckoutSession(stripe, session.id)
@@ -181,15 +190,21 @@ async function handleCheckoutCompleted(stripe, session) {
   }
 
   await saveLicenseRecord(record)
-
-  if (!record.emailSent) {
-    await sendLicenseEmail({ to: email, licenseKey })
-    record.emailSent = true
-    record.emailSentAt = new Date().toISOString()
-    await saveLicenseRecord(record)
-  }
+  await deliverLicenseEmail(record)
 
   return { licenseKey, emailSent: true }
+}
+
+async function deliverLicenseEmail(record) {
+  const delivery = await sendLicenseEmail({ to: record.email, licenseKey: record.licenseKey })
+  if (!delivery?.sent) {
+    throw new Error(
+      'License email was not sent. Configure RESEND_API_KEY and RESEND_FROM_EMAIL before taking payments.',
+    )
+  }
+  record.emailSent = true
+  record.emailSentAt = new Date().toISOString()
+  await saveLicenseRecord(record)
 }
 
 async function handleInvoicePaymentSucceeded(stripe, invoice) {
@@ -210,6 +225,10 @@ async function handleInvoicePaymentSucceeded(stripe, invoice) {
   if (!existing) {
     console.warn(`Renewal received for unknown subscription ${subscriptionId}`)
     return { skipped: true, reason: 'unknown-subscription' }
+  }
+
+  if (isHardRevoked(existing)) {
+    return { skipped: true, reason: 'hard-revoked', licenseKey: existing.licenseKey }
   }
 
   const renewal = {
@@ -247,6 +266,10 @@ async function handleInvoicePaymentFailed(_stripe, invoice) {
     return { skipped: true, reason: 'unknown-subscription' }
   }
 
+  if (isHardRevoked(existing)) {
+    return { skipped: true, reason: 'hard-revoked', licenseKey: existing.licenseKey }
+  }
+
   const updated = {
     ...existing,
     status: 'past_due',
@@ -264,12 +287,18 @@ async function handleSubscriptionUpdated(subscription) {
     return { skipped: true, reason: 'unknown-subscription' }
   }
 
+  if (isHardRevoked(existing)) {
+    return { skipped: true, reason: 'hard-revoked', licenseKey: existing.licenseKey }
+  }
+
+  const incoming = mapSubscriptionStatus(subscription.status)
   const updated = {
     ...existing,
-    status: mapSubscriptionStatus(subscription.status),
+    status: incoming,
     expiresAt: subscription.current_period_end
       ? new Date(subscription.current_period_end * 1000).toISOString()
       : existing.expiresAt,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
   }
 
   const approved = await maybeApprovePendingAffiliateCommission(updated)
@@ -328,32 +357,66 @@ async function handleChargeRefunded(stripe, charge) {
     return { skipped: true, reason: 'unknown-charge' }
   }
 
+  let invoice = null
+  if (charge.invoice) {
+    invoice =
+      typeof charge.invoice === 'string' ? await stripe.invoices.retrieve(charge.invoice) : charge.invoice
+  }
+
+  let subscription = null
+  if (license.stripeSubscriptionId) {
+    subscription = await stripe.subscriptions.retrieve(license.stripeSubscriptionId)
+  }
+
+  const plan = planChargeRefund({ license, charge, invoice, subscription })
+  if (plan.action === 'skip') {
+    return { skipped: true, reason: plan.reason, licenseKey: license.licenseKey }
+  }
+
   const refundedCents = charge.amount_refunded ?? 0
   const commissionableCents = license.firstPurchaseCommissionableCents ?? 0
   const commissionCents = license.affiliateCommission?.commissionAmountCents ?? 0
   const revokeCents = getRefundCommissionAdjustmentCents(
-    refundedCents,
+    plan.deltaCents || 0,
     commissionableCents,
     commissionCents,
   )
-
-  const isFullRefund = refundedCents >= (charge.amount ?? 0)
   const nextCommission = await revokeAffiliateCommissionForLicense(
     license,
     revokeCents,
-    isFullRefund ? 'revoked' : license.affiliateCommission?.status || 'pending',
+    plan.current ? 'revoked' : license.affiliateCommission?.status || 'pending',
   )
 
-  const updated = {
-    ...license,
-    status: isFullRefund ? 'refunded' : license.status,
-    refundedCents: (license.refundedCents || 0) + refundedCents,
+  let record = {
+    ...plan.record,
     affiliateCommission: nextCommission,
-    lastRefundAt: new Date().toISOString(),
   }
 
-  await saveLicenseRecord(updated)
-  return { licenseKey: license.licenseKey, refundedCents, isFullRefund }
+  if (plan.action !== 'revoke-and-cancel') {
+    await saveLicenseRecord(record)
+    return {
+      licenseKey: license.licenseKey,
+      refundedCents,
+      isFullRefund: plan.full,
+      canceledSubscription: false,
+      reason: plan.reason,
+    }
+  }
+
+  const cancelResult = await cancelLicenseSubscription(stripe, license.stripeSubscriptionId)
+  record = attachCancelResult(record, charge.id, cancelResult)
+  await saveLicenseRecord(record)
+  if (!cancelResult.ok) {
+    throw new Error(`Stripe subscription cancellation failed: ${cancelResult.error}`)
+  }
+
+  return {
+    licenseKey: license.licenseKey,
+    refundedCents,
+    isFullRefund: true,
+    canceledSubscription: true,
+    alreadyCanceled: cancelResult.already === true,
+  }
 }
 
 async function handleDisputeCreated(stripe, dispute) {

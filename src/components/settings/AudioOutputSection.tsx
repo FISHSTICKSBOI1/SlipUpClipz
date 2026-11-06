@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useAppSettings } from '../../context/AppSettingsContext'
-import { useLicense } from '../../context/LicenseContext'
 import {
   getOutputDeviceLabel,
   useActiveOutputDeviceLabel,
@@ -9,14 +8,12 @@ import {
 import { validateOutputRouting, formatOutputDeviceOptionLabel } from '../../lib/audioDevices'
 import { warmUpAudioEngine, playOutputTestTone } from '../../lib/soundboardAudio'
 import { playToggleSound } from '../../lib/uiSounds'
-import { PaywallNotice } from '../license/PaywallNotice'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 import { VirtualAudioSetupPanel } from './VirtualAudioSetupPanel'
 
 export function AudioOutputSection() {
   const { settings, updateSettings, outputRoutingNotice, clearOutputRoutingNotice } =
     useAppSettings()
-  const { isPro } = useLicense()
   const { devices, isLoading, hasVirtualOutput } = useAudioOutputDevices()
   const activeOutputLabel = useActiveOutputDeviceLabel(devices, settings)
   const validation = validateOutputRouting(devices, settings)
@@ -27,14 +24,12 @@ export function AudioOutputSection() {
   const vbCable = devices.find((device) => device.isVBCable)
 
   async function toggleRouteToVBCable() {
-    if (!isPro) return
     const nextValue = !settings.routeToVBCable
     playToggleSound(nextValue)
     await updateSettings({ routeToVBCable: nextValue })
   }
 
   async function handleOutputChange(deviceId: string) {
-    if (!isPro) return
     clearOutputRoutingNotice()
     await updateSettings({
       audioOutputDeviceId: deviceId === 'default' ? null : deviceId,
@@ -43,8 +38,6 @@ export function AudioOutputSection() {
   }
 
   async function handleTestOutput() {
-    if (!isPro) return
-
     setIsTestingOutput(true)
     setTestOutputMessage(null)
     warmUpAudioEngine()
@@ -79,13 +72,7 @@ export function AudioOutputSection() {
           <p className="py-4 text-xs text-amber-300">{outputRoutingNotice}</p>
         )}
 
-        {!isPro ? (
-          <div className="py-4">
-            <PaywallNotice feature="vbCableRouting" />
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-4 py-4">
+        <div className="flex items-center justify-between gap-4 py-4">
               <div>
                 <p className="text-sm font-medium text-gray-200">Route to VB-Audio Cable</p>
                 <p className="mt-0.5 text-xs text-gray-500">
@@ -126,7 +113,7 @@ export function AudioOutputSection() {
                 value={settings.audioOutputDeviceId ?? 'default'}
                 disabled={isLoading || settings.routeToVBCable}
                 onChange={(event) => void handleOutputChange(event.target.value)}
-                className="mt-3 w-full rounded-lg border border-surface-border bg-surface-overlay px-3 py-2 text-sm text-gray-200 outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="device-select mt-3 w-full rounded-lg border border-surface-border bg-surface-overlay px-3 py-2 text-sm text-gray-200 outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="default">Default Speakers</option>
                 {devices.map((device) => (
@@ -177,8 +164,6 @@ export function AudioOutputSection() {
                 </p>
               )}
             </div>
-          </>
-        )}
       </div>
     </section>
   )

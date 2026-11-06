@@ -13,11 +13,17 @@ export const SITE = {
    */
   microsoftStoreUrl:
     'https://apps.microsoft.com/detail/9N89SSLR9769?hl=en-us&gl=US&ocid=pdpshare',
-  currentVersion: '0.1.4',
+  /** Latest published desktop installer. v0.1.6 is prepared on this site but not downloadable yet. */
+  currentVersion: '0.1.5',
+  upcomingVersion: '0.1.6',
   installerSizeLabel: '~82.4 MB',
   checkoutEndpoint: '/.netlify/functions/create-checkout',
+  pricingQuoteEndpoint: '/.netlify/functions/pricing-quote',
+  surveyEndpoint: '/.netlify/functions/submit-survey',
   validateLicenseEndpoint: '/.netlify/functions/validate-license',
   billingPortalEndpoint: '/.netlify/functions/billing-portal',
+  billingRecoveryEndpoint: '/.netlify/functions/billing-recovery',
+  billingRecoveryRedeemEndpoint: '/.netlify/functions/billing-recovery-redeem',
   stripeWebhookEndpoint: '/.netlify/functions/stripe-webhook',
   helpCenterUrl: 'https://slipupclipz.com/help',
   contactUrl: 'https://slipupclipz.com/contact',
@@ -28,6 +34,16 @@ export const SITE = {
   contactSupportEndpoint: '/.netlify/functions/contact-support',
   demoVideoUrl: 'https://youtu.be/SwqrNqYVWMs?si=z1DpIM1PrfA7mMAv',
   demoVideoEmbedUrl: 'https://www.youtube-nocookie.com/embed/SwqrNqYVWMs',
+  promotionCode: 'SURVEY20',
+  /**
+   * YouTube Shorts of real SlipUpClipz use. Leave youtubeId empty until a real Short exists.
+   * Empty cards stay hidden.
+   */
+  shorts: [
+    { youtubeId: '', title: '' },
+    { youtubeId: '', title: '' },
+    { youtubeId: '', title: '' },
+  ],
   vbAudioUrl: 'https://vb-audio.com/Cable/',
   githubRepoUrl: 'https://github.com/FISHSTICKSBOI1/SlipUpClipz',
   logoUrl: '/images/logo.png',
@@ -37,13 +53,15 @@ export const SITE = {
     proName: 'Pro',
     proPriceLabel: '$4.99',
     proPriceInterval: '/year',
-    proPriceNote: 'Annual subscription · renews yearly · cancel anytime',
+    proPriceNote: 'Annual subscription · renews yearly at the regular price · cancel anytime',
+    introDiscountLabel: '$1 off the first year',
   },
   social: {
     tiktok: '',
     youtube: '',
     youtubeChannelName: 'Slipupclipz',
-    discord: 'https://discord.com/invite/c8wX9AUREj',
+    /** Hidden until a new invite is verified. The previous invite returned Discord error 10006. */
+    discord: '',
   },
   paths: {
     home: '/',
@@ -58,6 +76,7 @@ export const SITE = {
     privacy: '/privacy',
     terms: '/terms',
     refund: '/refund',
+    cookies: '/cookies',
   },
   screenshots: {
     clips: '/images/screenshots/clips-page.png',

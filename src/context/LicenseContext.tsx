@@ -4,14 +4,16 @@ import {
   deactivateLicenseKey,
   loadLicenseState,
 } from '../lib/electronBridge'
-import type { LicenseState } from '@shared/appTypes'
+import type { LicenseAccess, LicenseSnapshot, LicenseState } from '@shared/appTypes'
 
 type LicenseContextValue = {
   license: LicenseState
   isPro: boolean
+  access: LicenseAccess
+  developmentBuild: boolean
   isLoading: boolean
   activate: (key: string) => Promise<{ ok: boolean; error?: string }>
-  deactivate: () => Promise<void>
+  deactivate: () => Promise<{ ok: boolean; warning?: string }>
 }
 
 const LicenseContext = createContext<LicenseContextValue | null>(null)
@@ -19,18 +21,25 @@ const LicenseContext = createContext<LicenseContextValue | null>(null)
 export function LicenseProvider({ children }: { children: ReactNode }) {
   const [license, setLicense] = useState<LicenseState>({ activated: false, tier: 'free' })
   const [isPro, setIsPro] = useState(false)
+  const [access, setAccess] = useState<LicenseAccess>('free')
+  const [developmentBuild, setDevelopmentBuild] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  function applySnapshot(snapshot: LicenseSnapshot) {
+    setLicense(snapshot.license)
+    setIsPro(snapshot.isPro)
+    setAccess(snapshot.access)
+    setDevelopmentBuild(snapshot.developmentBuild)
+  }
 
   useEffect(() => {
     void loadLicenseState().then((result) => {
-      setLicense(result.license)
-      setIsPro(result.isPro)
+      applySnapshot(result)
       setIsLoading(false)
     })
 
-    const unsubscribe = window.electronAPI?.onLicenseChanged?.((next) => {
-      setLicense(next)
-      setIsPro(next.tier === 'pro' && next.activated)
+    const unsubscribe = window.electronAPI?.onLicenseChanged?.((snapshot) => {
+      applySnapshot(snapshot)
     })
 
     return () => unsubscribe?.()
@@ -39,8 +48,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   async function activate(key: string) {
     const result = await activateLicenseKey(key)
     if (result.ok) {
-      setLicense(result.license)
-      setIsPro(result.isPro)
+      applySnapshot(result)
       return { ok: true }
     }
 
@@ -50,13 +58,16 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   async function deactivate() {
     const result = await deactivateLicenseKey()
     if (result.ok) {
-      setLicense(result.license)
-      setIsPro(result.isPro)
+      applySnapshot(result)
     }
+    return result
+    return result
   }
 
   return (
-    <LicenseContext.Provider value={{ license, isPro, isLoading, activate, deactivate }}>
+    <LicenseContext.Provider
+      value={{ license, isPro, access, developmentBuild, isLoading, activate, deactivate }}
+    >
       {children}
     </LicenseContext.Provider>
   )

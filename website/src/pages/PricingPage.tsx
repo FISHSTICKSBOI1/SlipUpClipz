@@ -1,20 +1,31 @@
+import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ComparisonTable } from '../components/ComparisonTable'
+import { ManageSubscription } from '../components/ManageSubscription'
+import { PlanComparison } from '../components/PlanComparison'
 import { PricingCards } from '../components/PricingCards'
+import { SurveyOffer } from '../components/SurveyOffer'
 import { SectionHeading } from '../components/SectionHeading'
 import { Seo } from '../components/Seo'
 import { BottomCta } from '../components/BottomCta'
 import { SITE } from '../config/site'
+import { scrollToSection } from '../lib/scrollToSection'
 
 export function PricingPage() {
   const [searchParams] = useSearchParams()
   const purchaseStatus = searchParams.get('purchase')
 
+  useEffect(() => {
+    if (window.location.hash !== '#manage') return
+    const frame = window.requestAnimationFrame(() => scrollToSection('manage'))
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
+
   return (
     <>
       <Seo
         title="Pricing"
-        description="Download SlipUpClipz Free or upgrade to Pro for $4.99/year."
+        description="Download SlipUpClipz Free, or upgrade to Pro. Pro is an annual subscription advertised at $4.99/year. A short survey thanks you with $1 off the first year."
         path={SITE.paths.pricing}
       />
       <section className="section-space">
@@ -23,7 +34,7 @@ export function PricingPage() {
             align="center"
             eyebrow="Pricing"
             title="Start free. Upgrade to Pro."
-            description="Free to start. Pro is $4.99/year with secure Stripe checkout."
+            description="Free includes the soundboard. Pro is an annual Stripe subscription, advertised at $4.99/year."
           />
 
           {purchaseStatus === 'success' ? (
@@ -47,6 +58,23 @@ export function PricingPage() {
           <div className="mx-auto mt-12 max-w-4xl">
             <PricingCards />
           </div>
+          <div className="mx-auto mt-8 max-w-4xl">
+            <SurveyOffer />
+          </div>
+          <div className="mx-auto mt-16 max-w-4xl">
+            <SectionHeading
+              align="center"
+              eyebrow="Plans"
+              title="Free versus Pro"
+              description="Hotkeys, cable routing, voice effects, and startup are included free. Pro adds pads and AI Voice Clip Cloning."
+            />
+            <div className="mt-10">
+              <PlanComparison />
+            </div>
+          </div>
+          <div className="mx-auto mt-16 max-w-4xl">
+            <ManageSubscription />
+          </div>
           <p className="mx-auto mt-6 max-w-2xl text-center text-sm text-slate-500">
             SlipUpClipz is available through the Microsoft Store and as a direct Windows download.
           </p>
@@ -55,8 +83,9 @@ export function PricingPage() {
             <a href={SITE.paths.refund} className="text-glow-magenta hover:underline">
               Refund Policy
             </a>{' '}
-            for purchase details. Promotion codes can be entered on the Stripe Checkout page. Pro
-            licenses are purchased through Stripe on this site, not through Microsoft Store.
+            for purchase details. The survey thank-you is $1 off the first year of a new website
+            subscription, and it cannot be applied twice on the same checkout. Pro licenses are
+            purchased through Stripe on this site, not through Microsoft Store.
           </p>
 
           <div className="mx-auto mt-16 max-w-4xl">

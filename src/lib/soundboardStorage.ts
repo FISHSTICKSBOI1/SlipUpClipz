@@ -1,4 +1,4 @@
-import { PRO_SOUNDBOARD_PAD_LIMIT } from '@shared/appTypes'
+import { PRO_SOUNDBOARD_PAD_LIMIT } from '../../shared/appTypes.js'
 
 export const SOUNDBOARD_COLUMNS = 5
 export const SOUNDBOARD_ROWS = 10
@@ -11,6 +11,13 @@ export const PAD_VOLUME_MAX = 150
 
 const STORAGE_KEY = 'slipupclipz-soundboard'
 const STATE_VERSION = 3
+let soundboardUnreadable = false
+
+export function soundboardLoadError(): string | null {
+  return soundboardUnreadable
+    ? 'Saved soundboard assignments could not be read. They were left on this PC and were not replaced.'
+    : null
+}
 
 export type SoundboardPad = {
   clipId: string | null
@@ -78,10 +85,12 @@ export function loadSoundboardState(): SoundboardState {
 
     // Legacy: bare array of clip ids / null
     if (Array.isArray(parsed)) {
+      soundboardUnreadable = false
       return { version: STATE_VERSION, pads: migrateLegacySlots(parsed) }
     }
 
     if (parsed && typeof parsed === 'object') {
+      soundboardUnreadable = false
       const record = parsed as Partial<SoundboardState>
       return {
         version: STATE_VERSION,
@@ -89,13 +98,16 @@ export function loadSoundboardState(): SoundboardState {
       }
     }
 
+    soundboardUnreadable = true
     return { version: STATE_VERSION, pads: emptyPads() }
   } catch {
+    soundboardUnreadable = true
     return { version: STATE_VERSION, pads: emptyPads() }
   }
 }
 
 export function saveSoundboardState(state: SoundboardState): void {
+  if (soundboardUnreadable) return
   const payload: SoundboardState = {
     version: STATE_VERSION,
     pads: state.pads.slice(0, SOUNDBOARD_SLOT_COUNT).map((pad) => ({
@@ -127,6 +139,19 @@ export function saveSoundboardSlots(slots: SoundboardSlots): void {
     }
   }
   saveSoundboardState({ version: STATE_VERSION, pads })
+}
+
+export function clearDeletedClipFromSoundboard(deletedId: string): void {
+  if (soundboardUnreadable) return
+  const current = loadSoundboardState()
+  let changed = false
+  const pads = current.pads.map((pad) => {
+    if (pad.clipId !== deletedId) return pad
+    changed = true
+    return { ...pad, clipId: null }
+  })
+  if (!changed) return
+  saveSoundboardState({ ...current, pads })
 }
 
 export function padVolumeToGain(percent: number): number {

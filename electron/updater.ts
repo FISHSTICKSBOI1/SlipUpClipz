@@ -1,5 +1,12 @@
-import { app, dialog, ipcMain, type BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { getDisplayedAppVersion } from './appVersion.js'
+import {
+  githubNsisUpdatesAllowed,
+  isNewerRelease,
+  MICROSOFT_STORE_LISTING_URL,
+  updateDistribution,
+} from '../shared/updateChannel.js'
 
 export type UpdateStatus =
   | 'idle'
@@ -17,6 +24,7 @@ export type UpdateState = {
   progressPercent: number | null
   error: string | null
   canInstall: boolean
+  distribution?: 'github' | 'microsoft-store'
 }
 
 type GetMainWindow = () => BrowserWindow | null
@@ -28,11 +36,12 @@ let checking = false
 
 let state: UpdateState = {
   status: 'idle',
-  currentVersion: app.getVersion(),
+  currentVersion: getDisplayedAppVersion(),
   availableVersion: null,
   progressPercent: null,
   error: null,
   canInstall: false,
+  distribution: 'github',
 }
 
 function broadcastState(): void {
@@ -44,7 +53,7 @@ function broadcastState(): void {
 function setState(partial: Partial<UpdateState>): void {
   state = {
     ...state,
-    currentVersion: app.getVersion(),
+    currentVersion: getDisplayedAppVersion(),
     ...partial,
     canInstall: partial.canInstall ?? (updateReady || state.canInstall),
   }
@@ -73,8 +82,13 @@ function showUpdateReadyPrompt(version: string): void {
 }
 
 export function quitAndInstallUpdate(): void {
-  if (!app.isPackaged) {
-    console.warn('[autoUpdater] quitAndInstall ignored in development')
+  const distribution = updateDistribution({
+    packaged: app.isPackaged,
+    windowsStore: process.windowsStore,
+    execPath: process.execPath,
+  })
+  if (!githubNsisUpdatesAllowed(distribution)) {
+    console.warn('[autoUpdater] quitAndInstall ignored for this installation')
     return
   }
 
@@ -93,7 +107,15 @@ export function quitAndInstallUpdate(): void {
 }
 
 async function runUpdateCheck(manual: boolean): Promise<UpdateState> {
-  if (!app.isPackaged) {
+  const distribution = updateDistribution({
+    packaged: app.isPackaged,
+    windowsStore: process.windowsStore,
+    execPath: process.execPath,
+  })
+  if (distribution === 'microsoft-store') {
+    return storeManagedState()
+  }
+  if (distribution === 'unpackaged') {
     setState({
       status: 'up-to-date',
       availableVersion: null,
@@ -147,9 +169,22 @@ async function runUpdateCheck(manual: boolean): Promise<UpdateState> {
   }
 }
 
+function storeManagedState(): UpdateState {
+  setState({
+    status: 'up-to-date',
+    availableVersion: null,
+    progressPercent: null,
+    error: null,
+    canInstall: false,
+    distribution: 'microsoft-store',
+  })
+  return state
+}
+
 function wireAutoUpdaterEvents(): void {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.allowDowngrade = false
 
   autoUpdater.on('checking-for-update', () => {
     setState({
@@ -160,17 +195,29 @@ function wireAutoUpdaterEvents(): void {
   })
 
   autoUpdater.on('update-available', (info) => {
-    console.info(`[autoUpdater] Update available: ${info.version} (current ${app.getVersion()})`)
+    if (!isNewerRelease(getDisplayedAppVersion(), info.version)) {
+      console.info(`[autoUpdater] Ignoring ${info.version}; it is not newer than ${getDisplayedAppVersion()}`)
+      updateReady = false
+      setState({
+        status: 'up-to-date',
+        availableVersion: null,
+        progressPercent: null,
+        canInstall: false,
+      })
+      return
+    }
+    console.info(`[autoUpdater] Update available: ${info.version} (current ${getDisplayedAppVersion()})`)
     setState({
       status: 'available',
       availableVersion: info.version,
       error: null,
       progressPercent: 0,
+      distribution: 'github',
     })
   })
 
   autoUpdater.on('update-not-available', (info) => {
-    console.info(`[autoUpdater] Up to date (checked ${info.version}, current ${app.getVersion()})`)
+    console.info(`[autoUpdater] Up to date (checked ${info.version}, current ${getDisplayedAppVersion()})`)
     updateReady = false
     setState({
       status: 'up-to-date',
@@ -191,6 +238,15 @@ function wireAutoUpdaterEvents(): void {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    if (!isNewerRelease(getDisplayedAppVersion(), info.version)) {
+      updateReady = false
+      setState({
+        status: 'up-to-date',
+        availableVersion: null,
+        canInstall: false,
+      })
+      return
+    }
     console.info(`[autoUpdater] Update downloaded: ${info.version}`)
     updateReady = true
     setState({
@@ -218,7 +274,7 @@ export function registerUpdaterIpc(getWindow: GetMainWindow): void {
   getMainWindow = getWindow
 
   ipcMain.handle('updater:getState', () => {
-    state = { ...state, currentVersion: app.getVersion() }
+    state = { ...state, currentVersion: getDisplayedAppVersion() }
     return state
   })
 
@@ -227,34 +283,39 @@ export function registerUpdaterIpc(getWindow: GetMainWindow): void {
   ipcMain.handle('updater:install', () => {
     quitAndInstallUpdate()
   })
+
+  ipcMain.handle('updater:open-store', async () => {
+    await shell.openExternal(MICROSOFT_STORE_LISTING_URL)
+  })
 }
 
 export function setupAutoUpdater(getWindow: GetMainWindow): void {
   getMainWindow = getWindow
   state = {
     ...state,
-    currentVersion: app.getVersion(),
+    currentVersion: getDisplayedAppVersion(),
   }
 
-  if (!app.isPackaged) {
+  const distribution = updateDistribution({
+    packaged: app.isPackaged,
+    windowsStore: process.windowsStore,
+    execPath: process.execPath,
+  })
+  if (distribution === 'unpackaged') {
     console.info('[autoUpdater] Skipping updates in development (unpackaged build)')
     setState({
       status: 'up-to-date',
       canInstall: false,
+      distribution: 'github',
     })
     return
   }
 
-  // Microsoft Store builds are updated by the Store, not electron-updater / GitHub Releases.
-  const windowsStore = Boolean(
-    (process as NodeJS.Process & { windowsStore?: boolean }).windowsStore,
-  )
-  if (windowsStore) {
-    console.info('[autoUpdater] Skipping GitHub updates for Microsoft Store build')
-    setState({
-      status: 'up-to-date',
-      canInstall: false,
-    })
+  // The published Store app is the MSIX family SlipUpClipzLLC.SlipUpClipz.
+  // Windows Update replaces that package. Do not download the website NSIS installer.
+  if (distribution === 'microsoft-store') {
+    console.info('[autoUpdater] Microsoft Store package uses Store updates')
+    storeManagedState()
     return
   }
 
@@ -278,3 +339,6 @@ export function setupAutoUpdater(getWindow: GetMainWindow): void {
     })
   }
 }
+// setupAutoUpdater ends here.
+
+

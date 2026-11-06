@@ -13,6 +13,11 @@ export type VirtualAudioInputDevice = {
   isVoiceMeeter: boolean
 }
 
+export type AudioInputDevice = {
+  deviceId: string
+  label: string
+}
+
 export const VB_AUDIO_CABLE_URL = 'https://vb-audio.com/Cable/'
 
 const VB_CABLE_OUTPUT_HINTS = ['cable input', 'vb-audio', 'vb audio', 'virtual cable', 'vb cable']
@@ -52,16 +57,58 @@ export function isVirtualAudioInputLabel(label: string): boolean {
   return VIRTUAL_INPUT_HINTS.some((hint) => lower.includes(hint))
 }
 
+async function microphonePermission(): Promise<'granted' | 'denied' | 'prompt' | 'unknown'> {
+  if (!navigator.permissions?.query) return 'unknown'
+  try {
+    const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+    return status.state
+  } catch {
+    return 'unknown'
+  }
+}
+
+let permissionRequest: Promise<void> | null = null
+
 async function ensureDevicePermission(): Promise<void> {
-  if (!navigator.mediaDevices?.getUserMedia) return
+  if (!navigator.mediaDevices?.enumerateDevices || !navigator.mediaDevices.getUserMedia) return
 
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    const existing = await navigator.mediaDevices.enumerateDevices()
+    if (existing.some((device) => device.label)) return
+  } catch {
+    // Fall through and ask once if labels are still hidden.
+  }
+
+  if ((await microphonePermission()) === 'denied') return
+  if (permissionRequest) {
+    await permissionRequest
+    return
+  }
+
+  permissionRequest = navigator.mediaDevices.getUserMedia({ audio: true })
+    .then((stream) => {
       stream.getTracks().forEach((track) => track.stop())
     })
-  } catch {
-    // Labels may remain blank without permission.
-  }
+    .catch(() => {
+      // Labels may remain blank without permission.
+    })
+    .finally(() => {
+      permissionRequest = null
+    })
+  await permissionRequest
+}
+
+export async function listAudioInputDevices(): Promise<AudioInputDevice[]> {
+  if (!navigator.mediaDevices?.enumerateDevices) return []
+
+  await ensureDevicePermission()
+  const devices = await navigator.mediaDevices.enumerateDevices()
+  return devices
+    .filter((device) => device.kind === 'audioinput' && device.deviceId && device.deviceId !== 'default')
+    .map((device) => ({
+      deviceId: device.deviceId,
+      label: device.label || `Microphone ${device.deviceId.slice(0, 8)}`,
+    }))
 }
 
 export async function listAudioOutputDevices(): Promise<AudioOutputDevice[]> {
@@ -113,7 +160,15 @@ export async function listVirtualAudioInputDevices(): Promise<VirtualAudioInputD
 export function findPreferredVBCableDevice(
   devices: AudioOutputDevice[],
 ): AudioOutputDevice | undefined {
-  return devices.find((device) => device.isVBCable)
+  const exact = devices.find((device) => {
+    const lower = device.label.toLowerCase()
+    return lower.includes('cable input') && !/16\s*ch/i.test(lower)
+  })
+  if (exact) return exact
+  return (
+    devices.find((device) => device.isVBCable && !/16\s*ch/i.test(device.label)) ??
+    devices.find((device) => device.isVBCable)
+  )
 }
 
 export function findRecommendedVirtualOutputDevices(

@@ -11,7 +11,11 @@ import { Seo } from '../components/Seo'
 import { StoreTrustCard } from '../components/StoreTrustCard'
 import { WorkflowDemo } from '../components/WorkflowDemo'
 import { AiSupportAssistant } from '../components/AiSupportAssistant'
+import { AiVoicePanel } from '../components/AiVoicePanel'
+import { ShortsSection } from '../components/ShortsSection'
+import { SurveyOffer } from '../components/SurveyOffer'
 import { SITE } from '../config/site'
+import { scrollToAiVoice } from '../lib/scrollToSection'
 import { FEATURE_SECTIONS } from '../data/features'
 
 export function HomePage() {
@@ -19,13 +23,25 @@ export function HomePage() {
     <>
       <Seo
         title="SlipUpClipz — Capture what they just said. Replay it instantly."
-        description="SlipUpClipz captures the last few seconds of game, Discord, or microphone audio, lets you trim the best part, and replay it instantly through your soundboard."
+        description="SlipUpClipz captures recent game, Discord, or microphone audio, lets you trim it, and replay it through a Windows soundboard. Pro adds 50 pads and local AI Voice Clip Cloning."
         path={SITE.paths.home}
       />
 
       <section className="relative overflow-hidden bg-hero-grid">
         <div className="site-container grid items-center gap-12 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14 lg:py-24">
           <div className="motion-safe:animate-fade-up">
+            <button
+              type="button"
+              onClick={scrollToAiVoice}
+              className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-glow-purple/40 bg-glow-purple/10 px-3 py-1.5 text-left text-xs font-semibold text-slate-100 transition hover:border-glow-purple/70 hover:bg-glow-purple/15"
+            >
+              <span className="text-glow-magenta">NEW</span>
+              <span aria-hidden className="text-white/30">
+                ·
+              </span>
+              <span>AI Voice Clip Cloning</span>
+              <span aria-hidden>→</span>
+            </button>
             <p className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
               SlipUpClipz
             </p>
@@ -34,7 +50,9 @@ export function HomePage() {
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
               SlipUpClipz captures the last few seconds of game, Discord, or microphone audio, lets
-              you trim the best part, and replay it instantly through your soundboard.
+              you trim the best part, and replay it instantly through your soundboard. Free includes
+              7 pads, global hotkeys, and virtual-cable routing. Pro adds 50 pads and local AI Voice
+              Cloning.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button href={SITE.downloadUrl} className="btn-lift w-full sm:w-auto">
@@ -57,7 +75,7 @@ export function HomePage() {
               <li>Windows 10/11</li>
               <li>Free version available</li>
               <li>$4.99/year Pro</li>
-              <li>Annual subscription</li>
+              <li>AI Voice Clip Cloning</li>
             </ul>
           </div>
 
@@ -71,11 +89,17 @@ export function HomePage() {
         </div>
       </section>
 
-      <StoreTrustCard />
+      <section className="border-b border-ink-border/70 py-12 sm:py-16 lg:py-20">
+        <div className="site-container">
+          <AiVoicePanel />
+        </div>
+      </section>
 
       <div id="demo">
         <DemoSection />
       </div>
+
+      <ShortsSection />
 
       <section className="section-space">
         <div className="site-container">
@@ -97,7 +121,9 @@ export function HomePage() {
             title="Built for Discord chaos and ranked banter"
             description="Clip the moment, shape it, and fire it back through your mic path."
           />
-          {FEATURE_SECTIONS.slice(0, 3).map((feature, index) => (
+          {FEATURE_SECTIONS.filter((feature) => feature.kind !== 'ai')
+            .slice(0, 3)
+            .map((feature, index) => (
             <article
               key={feature.id}
               className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12"
@@ -132,7 +158,9 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="section-space">
+      <StoreTrustCard />
+
+      <section className="section-space border-y border-ink-border/70 bg-ink-raised/30">
         <div className="site-container">
           <SectionHeading
             align="center"
@@ -152,10 +180,13 @@ export function HomePage() {
             align="center"
             eyebrow="Pricing"
             title="Start free. Upgrade to Pro."
-            description="$4.99/year. Windows only."
+            description="Free covers the soundboard. Pro is an annual subscription, advertised at $4.99/year."
           />
           <div className="mx-auto mt-10 max-w-4xl">
             <PricingCards />
+          </div>
+          <div className="mx-auto mt-8 max-w-4xl">
+            <SurveyOffer prominence="compact" />
           </div>
         </div>
       </section>

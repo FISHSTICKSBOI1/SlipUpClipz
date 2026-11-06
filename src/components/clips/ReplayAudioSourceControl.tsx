@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ReplayAudioSource } from '@shared/appTypes'
+import { inputDeviceStillPresent, microphoneChoicePatch, replayMicrophoneStatus } from '@shared/replayCapture'
 import { useAppSettings } from '../../context/AppSettingsContext'
+import { useReplayBufferContext } from '../../context/ReplayBufferContext'
 import {
+  listAudioInputDevices,
   listVirtualAudioInputDevices,
+  subscribeToAudioDeviceChanges,
+  type AudioInputDevice,
   type VirtualAudioInputDevice,
 } from '../../lib/audioDevices'
 import { isElectronApp } from '../../lib/electronBridge'
@@ -10,19 +15,43 @@ import { VB_CABLE_SETUP_MESSAGE } from '../../lib/replayAudioCapture'
 
 export function ReplayAudioSourceControl() {
   const { settings, updateSettings } = useAppSettings()
+  const { isListening, microphoneLabel, replayAudioSource } = useReplayBufferContext()
   const [virtualInputs, setVirtualInputs] = useState<VirtualAudioInputDevice[]>([])
+  const [microphones, setMicrophones] = useState<AudioInputDevice[]>([])
   const [loopbackSupported, setLoopbackSupported] = useState(false)
 
   useEffect(() => {
-    void listVirtualAudioInputDevices().then(setVirtualInputs)
+    let cancelled = false
+    const refresh = () => {
+      void listVirtualAudioInputDevices().then((devices) => {
+        if (!cancelled) setVirtualInputs(devices)
+      })
+      void listAudioInputDevices().then((devices) => {
+        if (!cancelled) setMicrophones(devices)
+      })
+    }
+    refresh()
     void window.electronAPI?.systemAudio
       ?.getCapabilities()
-      .then((caps) => setLoopbackSupported(caps.loopbackSupported))
-      .catch(() => setLoopbackSupported(false))
+      .then((caps) => {
+        if (!cancelled) setLoopbackSupported(caps.loopbackSupported)
+      })
+      .catch(() => {
+        if (!cancelled) setLoopbackSupported(false)
+      })
+    const unsubscribe = subscribeToAudioDeviceChanges(refresh)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   async function handleReplaySourceChange(source: ReplayAudioSource) {
     await updateSettings({ replayAudioSource: source })
+  }
+
+  async function handleMicrophoneChange(deviceId: string) {
+    await updateSettings(microphoneChoicePatch(deviceId))
   }
 
   async function handleVirtualInputChange(deviceId: string) {
@@ -77,6 +106,15 @@ export function ReplayAudioSourceControl() {
         />
       </div>
 
+      <MicrophoneChoice
+        savedId={settings.audioInputDeviceId}
+        microphones={microphones}
+        source={replayAudioSource}
+        listening={isListening}
+        activeLabel={microphoneLabel}
+        onChange={(deviceId) => void handleMicrophoneChange(deviceId)}
+      />
+
       {settings.replayAudioSource === 'virtual' && (
         <div className="mt-3">
           <label className="text-xs font-medium text-gray-400" htmlFor="virtual-input-device">
@@ -86,7 +124,7 @@ export function ReplayAudioSourceControl() {
             id="virtual-input-device"
             value={settings.virtualAudioInputDeviceId ?? virtualInputs[0]?.deviceId ?? 'default'}
             onChange={(event) => void handleVirtualInputChange(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-surface-border bg-surface-overlay px-3 py-2 text-sm text-gray-200 outline-none focus:border-accent"
+            className="device-select mt-2 w-full rounded-lg border border-surface-border bg-surface-overlay px-3 py-2 text-sm text-gray-200 outline-none focus:border-accent"
           >
             {virtualInputs.length > 0 ? (
               virtualInputs.map((device) => (
@@ -112,6 +150,58 @@ export function ReplayAudioSourceControl() {
       {settings.replayAudioSource === 'virtual' && virtualInputs.length === 0 && (
         <p className="mt-3 text-xs text-amber-300">{VB_CABLE_SETUP_MESSAGE}</p>
       )}
+    </div>
+  )
+}
+
+function MicrophoneChoice({
+  savedId,
+  microphones,
+  source,
+  listening,
+  activeLabel,
+  onChange,
+}: {
+  savedId: string | null
+  microphones: AudioInputDevice[]
+  source: ReplayAudioSource
+  listening: boolean
+  activeLabel: string | null
+  onChange: (deviceId: string) => void
+}) {
+  const savedDevice = microphones.find((device) => device.deviceId === savedId)
+  const savedPresent = !savedId || microphones.length === 0 || inputDeviceStillPresent(savedId, microphones)
+  const status = replayMicrophoneStatus({
+    source,
+    savedPresent,
+    savedLabel: savedDevice?.label ?? (savedId ? 'saved device' : 'System default'),
+    listening,
+    activeLabel,
+  })
+
+  return (
+    <div className="mt-3">
+      <label className="text-xs font-medium text-gray-400" htmlFor="microphone-input-device">
+        Microphone
+      </label>
+      <select
+        id="microphone-input-device"
+        value={savedId ?? ''}
+        onChange={(event) => onChange(event.target.value)}
+        className="device-select mt-2 w-full rounded-lg border border-surface-border bg-surface-overlay px-3 py-2 text-sm text-gray-200 outline-none focus:border-accent"
+      >
+        <option value="">System default</option>
+        {savedId && microphones.length > 0 && !inputDeviceStillPresent(savedId, microphones) && (
+          <option value={savedId}>Saved microphone unavailable</option>
+        )}
+        {microphones.map((device) => (
+          <option key={device.deviceId} value={device.deviceId}>
+            {device.label}
+          </option>
+        ))}
+      </select>
+      <p className="mt-2 text-xs text-gray-500">{status.saved}</p>
+      <p className="mt-1 text-xs text-gray-500">{status.active}</p>
     </div>
   )
 }

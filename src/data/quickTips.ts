@@ -5,7 +5,7 @@ export const QUICK_TIPS = [
   'Voice Effects change both your mic and Hear Myself preview.',
   'Replay Buffer constantly records your selected audio source.',
   'Press your Clip hotkey immediately after something funny happens.',
-  'Pro users can create many soundboard pads.',
+  'Pro adds AI Voice Cloning and 50 soundboard pads.',
   'Use the tray icon to keep SlipUpClipz running in the background.',
   'Automatic updates can be checked in Settings.',
   'Drag the trim selection to move it without changing its length.',

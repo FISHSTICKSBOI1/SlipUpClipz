@@ -1,21 +1,22 @@
+import {
+  captureDeviceMatches,
+  microphoneTrackConstraints,
+  microphoneUnavailableMessage,
+  openedWrongMicrophoneMessage,
+} from '@shared/replayCapture'
 import { isElectronApp } from './electronBridge'
 import { logClipPipeline, logClipPipelineError } from './clipPipelineLog'
 
 export type ReplayCaptureConfig = {
   source: 'microphone' | 'system' | 'virtual'
   virtualAudioInputDeviceId: string | null
+  audioInputDeviceId: string | null
 }
 
 export const VB_CABLE_SETUP_MESSAGE =
   'System audio loopback is unavailable on this device. Install VB-Audio Virtual Cable ' +
   '(or VoiceMeeter), set your Windows playback device to CABLE Input, route game/Discord audio ' +
   'through it, then choose Virtual Audio Device as the replay audio source in Settings.'
-
-const AUDIO_CAPTURE_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: false,
-  noiseSuppression: false,
-  autoGainControl: true,
-}
 
 export async function queryMicrophonePermission():
   Promise<'granted' | 'denied' | 'prompt' | 'unknown'> {
@@ -62,13 +63,19 @@ function stripVideoTracks(stream: MediaStream): void {
   }
 }
 
-export async function acquireMicrophoneStream(): Promise<{
+export async function acquireMicrophoneStream(deviceId: string | null = null): Promise<{
   stream: MediaStream
   label: string
 }> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: AUDIO_CAPTURE_CONSTRAINTS,
-  })
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: microphoneTrackConstraints(deviceId, 'replay'),
+    })
+  } catch (error) {
+    if (deviceId) throw new Error(microphoneUnavailableMessage())
+    throw error
+  }
 
   const track = validateLiveAudioTrack(stream)
   if (!track) {
@@ -77,7 +84,13 @@ export async function acquireMicrophoneStream(): Promise<{
   }
 
   const label = await resolveAudioInputLabel(track)
-  logClipPipeline('capture:microphone', { label, deviceId: track.getSettings().deviceId })
+  const actualId = track.getSettings().deviceId
+  if (!captureDeviceMatches(deviceId, actualId)) {
+    stream.getTracks().forEach((entry) => entry.stop())
+    throw new Error(openedWrongMicrophoneMessage(label))
+  }
+
+  logClipPipeline('capture:microphone', { label, deviceId: actualId, requestedDeviceId: deviceId })
   return { stream, label }
 }
 
@@ -196,5 +209,5 @@ export async function acquireReplayCaptureStream(
     return acquireVirtualAudioStream(config.virtualAudioInputDeviceId ?? '')
   }
 
-  return acquireMicrophoneStream()
+  return acquireMicrophoneStream(config.audioInputDeviceId)
 }

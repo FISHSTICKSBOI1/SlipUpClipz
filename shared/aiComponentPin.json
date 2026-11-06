@@ -1,0 +1,10 @@
+{
+  "id": "slipupclipz-qwen3-tts-0.6b-base",
+  "componentVersion": "1",
+  "model": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+  "archiveName": "SlipUpClipz-AI-0.1.6.tar",
+  "sha256": "2071d24d71b8344974294ec338d33187c1ce968342882c87e4904013183ed2af",
+  "bytes": 7707726336,
+  "url": "https://downloads.slipupclipz.com/SlipUpClipz-AI-0.1.6.tar",
+  "minFreeBytes": 16707726336
+}

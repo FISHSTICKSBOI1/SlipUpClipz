@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { PREMIUM_FEATURES } from '@shared/appTypes'
+import { upgradeNavigationState } from '@shared/upgradeNavigation'
 
 type PaywallNoticeProps = {
   feature: keyof typeof PREMIUM_FEATURES
@@ -7,6 +8,8 @@ type PaywallNoticeProps = {
 }
 
 export function PaywallNotice({ feature, compact = false }: PaywallNoticeProps) {
+  const navigate = useNavigate()
+
   return (
     <div
       className={`rounded-lg border border-amber-500/20 bg-amber-500/10 ${
@@ -19,12 +22,13 @@ export function PaywallNotice({ feature, compact = false }: PaywallNoticeProps) 
       <p className={`mt-1 ${compact ? 'text-[11px]' : 'text-xs'} leading-relaxed text-amber-100/80`}>
         {PREMIUM_FEATURES[feature]}
       </p>
-      <Link
-        to="/settings#license"
+      <button
+        type="button"
+        onClick={() => navigate('/settings', { state: upgradeNavigationState() })}
         className={`mt-2 inline-block ${compact ? 'text-[11px]' : 'text-xs'} font-medium text-accent-hover hover:text-accent`}
       >
         Upgrade in Settings
-      </Link>
+      </button>
     </div>
   )
 }

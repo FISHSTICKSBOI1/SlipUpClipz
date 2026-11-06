@@ -18,6 +18,7 @@ type UpdateState = {
   progressPercent: number | null
   error: string | null
   canInstall: boolean
+  distribution?: 'github' | 'microsoft-store'
 }
 
 const STATUS_LABEL: Record<UpdateStatus, string> = {
@@ -78,7 +79,11 @@ export function UpdatesSection() {
     <section className="panel overflow-hidden">
       <SettingsSectionHeader
         title="Updates"
-        description="Check for SlipUpClipz updates from GitHub Releases."
+        description={
+          state.distribution === 'microsoft-store'
+            ? 'This installation receives updates from the Microsoft Store.'
+            : 'Check for SlipUpClipz updates from the signed GitHub release.'
+        }
       />
 
       <div className="divide-y divide-surface-border px-5 sm:px-6">
@@ -94,17 +99,19 @@ export function UpdatesSection() {
           <div>
             <p className="text-sm font-medium text-gray-200">Update status</p>
             <p className="mt-0.5 text-xs text-gray-500">
-              {state.availableVersion
-                ? `Newer version: ${state.availableVersion}`
-                : isDevPreview
-                  ? 'Updates run only in installed (packaged) builds.'
-                  : 'Automatic checks run when the app starts.'}
+              {state.distribution === 'microsoft-store'
+                ? 'Windows installs Store updates for this package. Open the Store page if an update is waiting.'
+                : state.availableVersion
+                  ? `Newer version: ${state.availableVersion}`
+                  : isDevPreview
+                    ? 'Updates run only in installed (packaged) builds.'
+                    : 'Automatic checks run when the app starts.'}
             </p>
-            {state.error ? (
-              <p className="mt-2 text-xs text-red-400">{state.error}</p>
-            ) : null}
+            {state.error ? <p className="mt-2 text-xs text-red-400">{state.error}</p> : null}
           </div>
-          <span className="shrink-0 text-sm text-gray-400">{STATUS_LABEL[state.status]}</span>
+          <span className="shrink-0 text-sm text-gray-400">
+            {state.distribution === 'microsoft-store' ? 'Microsoft Store' : STATUS_LABEL[state.status]}
+          </span>
         </div>
 
         {showProgress ? (
@@ -125,12 +132,22 @@ export function UpdatesSection() {
         <div className="flex flex-wrap gap-2 py-4">
           <button
             type="button"
-            disabled={isDevPreview || checking || downloading}
+            disabled={isDevPreview || checking || downloading || state.distribution === 'microsoft-store'}
             onClick={() => void checkForUpdates()}
             className="rounded-lg border border-surface-border bg-surface-overlay px-3 py-2 text-xs font-medium text-gray-200 transition-colors hover:border-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {checking ? 'Checking…' : 'Check for Updates'}
           </button>
+
+          {state.distribution === 'microsoft-store' ? (
+            <button
+              type="button"
+              onClick={() => void window.electronAPI?.updater.openStore()}
+              className="rounded-lg border border-accent bg-accent/20 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-accent/30"
+            >
+              Open Microsoft Store
+            </button>
+          ) : null}
 
           {state.canInstall || state.status === 'ready' ? (
             <button

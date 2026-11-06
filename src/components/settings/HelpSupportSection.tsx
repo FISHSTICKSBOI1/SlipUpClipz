@@ -1,9 +1,13 @@
+import { useState } from 'react'
+import { BugReportPanel } from './BugReportPanel'
+import { SetupGuidePanel } from './SetupGuidePanel'
 import { EXTERNAL_LINKS, openExternalLink } from '../../lib/externalLinks'
 import { useOnboardingTour } from '../../context/OnboardingTourContext'
 import { SettingsSectionHeader } from './SettingsSectionHeader'
 
 export function HelpSupportSection() {
   const { startTour, isActive } = useOnboardingTour()
+  const [guideOpen, setGuideOpen] = useState(false)
 
   return (
     <section className="panel overflow-hidden">
@@ -36,11 +40,21 @@ export function HelpSupportSection() {
           >
             Restart Guided Tour
           </button>
+          <button
+            type="button"
+            onClick={() => setGuideOpen((open) => !open)}
+            className="btn-secondary !px-3 !py-2 !text-xs"
+          >
+            {guideOpen ? 'Hide setup guide' : 'Open setup guide'}
+          </button>
         </div>
+        {guideOpen && <SetupGuidePanel />}
 
         <p className="text-xs leading-relaxed text-ink-muted">
           Opens the SlipUpClipz Help Center and Contact pages in your browser.
         </p>
+
+        <BugReportPanel />
 
         <button
           type="button"

@@ -1,18 +1,29 @@
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useClipLibraryContext } from '../context/ClipLibraryContext'
 import { formatRelativeDate } from '../lib/format'
+import { importAudioBatch } from '../lib/importAudioBatch'
 import { PlusIcon } from '../components/icons'
 
 export function HomePage() {
-  const { clips, addClip } = useClipLibraryContext()
+  const { clips, importAudioFile } = useClipLibraryContext()
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importNotice, setImportNotice] = useState<string | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const recentClips = [...clips]
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 5)
 
-  function handleNewClip() {
-    const name = window.prompt('Clip name')
-    if (name) addClip(name)
+  async function handleNewClipFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return
+    const result = await importAudioBatch(fileList, importAudioFile, (fileName, existingName) =>
+      window.confirm(
+        `"${fileName}" looks like it was already imported as "${existingName}". Import another copy anyway?`,
+      ),
+    )
+    setImportError(result.error)
+    setImportNotice(result.notice)
   }
 
   return (
@@ -49,13 +60,35 @@ export function HomePage() {
           </div>
           <button
             type="button"
-            onClick={handleNewClip}
+            onClick={() => importInputRef.current?.click()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
           >
             <PlusIcon className="h-4 w-4" />
             New clip
           </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".mp3,.wav,audio/mpeg,audio/wav,audio/wave,audio/x-wav"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              void handleNewClipFiles(event.target.files)
+              event.target.value = ''
+            }}
+          />
         </div>
+        {importError || importNotice ? (
+          <p
+            className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+              importError
+                ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                : 'border-clip/25 bg-clip/10 text-clip-hover'
+            }`}
+          >
+            {importError ?? importNotice}
+          </p>
+        ) : null}
 
         {recentClips.length === 0 ? (
           <p className="mt-5 text-sm text-gray-500">No clips in your library yet.</p>

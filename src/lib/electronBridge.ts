@@ -2,7 +2,7 @@ import {
   DEFAULT_LICENSE,
   DEFAULT_SETTINGS,
   type AppSettings,
-  type LicenseState,
+  type LicenseSnapshot,
 } from '@shared/appTypes'
 
 export function isElectronApp(): boolean {
@@ -25,15 +25,17 @@ export async function saveAppSettings(partial: Partial<AppSettings>): Promise<Ap
   return { ...(await loadAppSettings()), ...partial }
 }
 
-export async function loadLicenseState(): Promise<{
-  license: LicenseState
-  isPro: boolean
-}> {
+export async function loadLicenseState(): Promise<LicenseSnapshot> {
   if (window.electronAPI?.license) {
     return window.electronAPI.license.get()
   }
 
-  return { license: { ...DEFAULT_LICENSE }, isPro: false }
+  return {
+    license: { ...DEFAULT_LICENSE },
+    isPro: false,
+    access: 'free',
+    developmentBuild: false,
+  }
 }
 
 export async function activateLicenseKey(key: string) {
@@ -46,7 +48,13 @@ export async function activateLicenseKey(key: string) {
 
 export async function deactivateLicenseKey() {
   if (!window.electronAPI?.license) {
-    return { ok: true as const, license: { ...DEFAULT_LICENSE }, isPro: false }
+    return {
+      ok: true as const,
+      license: { ...DEFAULT_LICENSE },
+      isPro: false,
+      access: 'free' as const,
+      developmentBuild: false,
+    }
   }
 
   return window.electronAPI.license.deactivate()

@@ -7,10 +7,12 @@ import {
   type LicenseState,
   type VoiceEffectsPreset,
 } from '../shared/appTypes.js'
+import { normalizeAudioInputDeviceId } from '../shared/replayCapture.js'
 
 type StoreSchema = {
   settings: AppSettings
   license: LicenseState
+  deviceId?: string
 }
 
 const VALID_VOICE_PRESETS: VoiceEffectsPreset[] = [
@@ -58,6 +60,13 @@ export function getSettings(): AppSettings {
   }
   if (typeof merged.allowF11Fullscreen !== 'boolean') {
     merged.allowF11Fullscreen = DEFAULT_SETTINGS.allowF11Fullscreen
+  }
+  merged.devProTesting = merged.devProTesting === true
+  merged.audioInputDeviceId = normalizeAudioInputDeviceId(merged.audioInputDeviceId)
+  merged.gamingDiscordPreset = merged.gamingDiscordPreset === true
+  merged.voiceChatMicrophoneDeviceId = normalizeAudioInputDeviceId(merged.voiceChatMicrophoneDeviceId)
+  if (merged.monitorMicrophoneLocally !== true && merged.monitorMicrophoneLocally !== false) {
+    merged.monitorMicrophoneLocally = null
   }
 
   return merged

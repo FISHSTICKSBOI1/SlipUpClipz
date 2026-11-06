@@ -10,7 +10,8 @@ export function BottomCta() {
             Ready to clip the next lobby moment?
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-sm text-slate-300 sm:text-base">
-            Download SlipUpClipz for Windows. Start free, upgrade to Pro for $4.99/year.
+            Download SlipUpClipz for Windows. Start free, or upgrade to Pro for $4.99/year. The
+            public installer is v{SITE.currentVersion}.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button href={SITE.downloadUrl} className="btn-lift">

@@ -138,6 +138,9 @@ export function VoiceEffectsControls() {
 
       <div className="space-y-5 px-5 py-5 sm:px-6">
         <p className="badge-accent w-fit">{status}</p>
+        {settings.gamingDiscordPreset && (
+          <p className="text-xs text-ink-muted">Voice effects are paused while voice chat routing is on.</p>
+        )}
         {runtimeMessage && (
           <p className="text-xs text-amber-300/90" role="status">
             {runtimeMessage}

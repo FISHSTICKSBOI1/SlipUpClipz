@@ -1,6 +1,5 @@
 const SITE_URL = process.env.SITE_URL || 'https://slipupclipz.com'
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'slipupclipz@gmail.com'
-const BILLING_PORTAL_PATH = '/.netlify/functions/billing-portal'
 
 function escapeHtml(value) {
   return String(value)
@@ -92,11 +91,130 @@ async function sendResendEmail(payload) {
   return { sent: true }
 }
 
+function formatUsd(cents) {
+  return `$${(Number(cents) / 100).toFixed(2)}`
+}
+
+function formatRenewalDate(iso) {
+  const parsed = Date.parse(iso)
+  if (!Number.isFinite(parsed)) return iso
+  return new Date(parsed).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+function buildRenewalNoticeEmail({ licenseKey, renewsAt, amountCents, hadIntroDiscount }) {
+  const manageUrl = `${SITE_URL}/pricing#manage`
+  const amount = formatUsd(amountCents)
+  const when = formatRenewalDate(renewsAt)
+  const intro = hadIntroDiscount
+    ? 'Your first year included a one-time discount. That discount does not apply to this renewal. '
+    : 'A discount on the first invoice, if you had one, does not apply to this renewal. '
+  const text = [
+    'Your SlipUpClipz Pro subscription will renew unless you cancel.',
+    '',
+    `Product: SlipUpClipz Pro`,
+    `Renewal date: ${when}`,
+    'Renewal term: 1 year',
+    `Renewal charge: ${amount}, once per year`,
+    intro.trim(),
+    '',
+    'To cancel automatic renewal before this charge, open:',
+    manageUrl,
+    'Enter your license key and the email you used at checkout. If you lost the key, use the purchase-email option on that page. Stripe will show the cancellation page.',
+    'If you cancel, Pro stays on through the period you already paid, and this renewal will not be charged.',
+    'Removing the license from a computer does not cancel billing.',
+    '',
+    `Your license key: ${licenseKey}`,
+    `Contact: ${SUPPORT_EMAIL}`,
+  ].join('\n')
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#111;">
+  <p><strong>Your SlipUpClipz Pro subscription will renew unless you cancel.</strong></p>
+  <p>Product: SlipUpClipz Pro<br>
+  Renewal date: ${escapeHtml(when)}<br>
+  Renewal term: 1 year<br>
+  Renewal charge: ${escapeHtml(amount)}, once per year</p>
+  <p>${escapeHtml(intro.trim())}</p>
+  <p><strong>Cancel automatic renewal:</strong><br>
+  <a href="${escapeHtml(manageUrl)}">${escapeHtml(manageUrl)}</a><br>
+  Enter your license key and the email you used at checkout. If you lost the key, use the purchase-email option on that page.</p>
+  <p>If you cancel, Pro stays on through the period you already paid, and this renewal will not be charged. Removing the license from a computer does not cancel billing.</p>
+  <p>Your license key: ${escapeHtml(licenseKey)}<br>
+  Contact: <a href="mailto:${escapeHtml(SUPPORT_EMAIL)}">${escapeHtml(SUPPORT_EMAIL)}</a></p>
+</body>
+</html>`
+
+  return {
+    subject: `SlipUpClipz Pro renews on ${when} for ${amount}`,
+    html,
+    text,
+  }
+}
+
+function buildBillingRecoveryEmail({ licenseKey, recoveryUrl }) {
+  const text = [
+    'Use this link to manage or cancel your SlipUpClipz Pro subscription.',
+    recoveryUrl,
+    'The link works once and expires in 60 minutes.',
+    '',
+    'Your license key:',
+    licenseKey,
+    '',
+    'Canceling stops the next renewal. Pro stays on through the period you already paid.',
+    'Removing the license from a computer does not cancel billing.',
+    '',
+    SUPPORT_EMAIL,
+  ].join('\n')
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#111;">
+  <p><a href="${escapeHtml(recoveryUrl)}">Manage or cancel SlipUpClipz Pro</a></p>
+  <p>This link works once and expires in 60 minutes.</p>
+  <p>Your license key:<br><span style="font-family:Consolas,monospace;">${escapeHtml(licenseKey)}</span></p>
+  <p>Canceling stops the next renewal. Pro stays on through the period you already paid. Removing the license from a computer does not cancel billing.</p>
+  <p><a href="mailto:${escapeHtml(SUPPORT_EMAIL)}">${escapeHtml(SUPPORT_EMAIL)}</a></p>
+</body>
+</html>`
+  return {
+    subject: 'Manage your SlipUpClipz Pro subscription',
+    html,
+    text,
+  }
+}
+
+async function sendRenewalNoticeEmail(fields) {
+  const content = buildRenewalNoticeEmail(fields)
+  return sendResendEmail({
+    to: [fields.to],
+    reply_to: SUPPORT_EMAIL,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  })
+}
+
+async function sendBillingRecoveryEmail(fields) {
+  const content = buildBillingRecoveryEmail(fields)
+  return sendResendEmail({
+    to: [fields.to],
+    reply_to: SUPPORT_EMAIL,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  })
+}
+
 function buildLicenseEmailHtml({ licenseKey }) {
   const safeKey = escapeHtml(licenseKey)
   const safeSupport = escapeHtml(SUPPORT_EMAIL)
   const safeDownload = escapeHtml(SITE_URL)
-  const safeBillingHelp = escapeHtml(`${SITE_URL}/help`)
+  const safeManage = escapeHtml(`${SITE_URL}/pricing#manage`)
 
   return `<!DOCTYPE html>
 <html>
@@ -104,9 +222,9 @@ function buildLicenseEmailHtml({ licenseKey }) {
   <p>Thank you for purchasing SlipUpClipz Pro.</p>
   <p><strong>Your License Key:</strong></p>
   <p style="font-family:Consolas,monospace;font-size:18px;letter-spacing:0.04em;">${safeKey}</p>
-  <p><strong>Manage your subscription:</strong><br>
-  Open SlipUpClipz and use your license key with the billing portal request flow, or visit
-  <a href="${safeBillingHelp}">${safeBillingHelp}</a> for help.</p>
+  <p>Pro renews once a year at the regular price unless you cancel before the renewal. A first-year discount, if one was applied, covers only the first invoice.</p>
+  <p><strong>Cancel automatic renewal:</strong><br>
+  Open <a href="${safeManage}">${safeManage}</a> and choose Manage subscription. Enter this license key and the email you used at checkout. If you lose the key, request a link on that page with the same email. Stripe then lets you update billing or cancel renewal. Pro stays on through the period you already paid. A full refund of the current year ends Pro and stops future renewal charges. Removing the license from a computer does not cancel billing.</p>
   <p><strong>Need help?</strong><br><a href="mailto:${safeSupport}">${safeSupport}</a></p>
   <p><strong>Download:</strong><br><a href="${safeDownload}">${safeDownload}</a></p>
 </body>
@@ -114,14 +232,20 @@ function buildLicenseEmailHtml({ licenseKey }) {
 }
 
 function buildLicenseEmailText({ licenseKey }) {
+  const manageUrl = `${SITE_URL}/pricing#manage`
   return [
     'Thank you for purchasing SlipUpClipz Pro.',
     '',
     'Your License Key:',
     licenseKey,
     '',
-    'Manage your subscription:',
-    `Use your license key with ${SITE_URL}${BILLING_PORTAL_PATH} from the app when billing self-service is connected.`,
+    'Pro renews once a year at the regular price unless you cancel before the renewal. A first-year discount, if one was applied, covers only the first invoice.',
+    '',
+    'Cancel automatic renewal:',
+    manageUrl,
+    'Enter this license key and the email you used at checkout. If you lose the key, request a link on that page with the same email. Stripe lets you update billing or cancel renewal. Pro stays on through the period you already paid.',
+    'A full refund of the current year ends Pro and stops future renewal charges.',
+    'Removing the license from a computer does not cancel billing.',
     '',
     'Need help?',
     SUPPORT_EMAIL,
@@ -210,12 +334,95 @@ async function sendSupportEmail(fields) {
   return sendResendEmail(payload)
 }
 
+function buildDeviceTransferEmail({ code }) {
+  const safeCode = escapeHtml(code)
+  const text = [
+    'Use this code to move SlipUpClipz Pro to the computer that requested the transfer.',
+    '',
+    code,
+    '',
+    'The code expires in 60 minutes and works once.',
+    'It does not change your paid period or refund the subscription.',
+    'If you did not request this, ignore the email. The previous computer stays registered.',
+  ].join('\n')
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#111;">
+  <p>Use this code to move SlipUpClipz Pro to the computer that requested the transfer.</p>
+  <p style="font-family:Consolas,monospace;font-size:20px;letter-spacing:0.08em;">${safeCode}</p>
+  <p>The code expires in 60 minutes and works once. It does not change your paid period.</p>
+  <p>If you did not request this, ignore the email. The previous computer stays registered.</p>
+</body>
+</html>`
+  return {
+    subject: 'Transfer SlipUpClipz Pro to another computer',
+    html,
+    text,
+  }
+}
+
+async function sendDeviceTransferEmail(fields) {
+  const content = buildDeviceTransferEmail(fields)
+  return sendResendEmail({
+    to: [fields.to],
+    reply_to: SUPPORT_EMAIL,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  })
+}
+
+function buildDeviceTransferEmail({ code }) {
+  const safeCode = escapeHtml(code)
+  const text = [
+    'Use this code to move SlipUpClipz Pro to the computer that requested the transfer.',
+    '',
+    code,
+    '',
+    'The code expires in 60 minutes and works once.',
+    'It does not change your paid period or refund the subscription.',
+    'If you did not request this, ignore the email. The previous computer stays registered.',
+  ].join('\n')
+  const html = `<!DOCTYPE html>
+<html>
+  sendDeviceTransferEmail,
+<body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#111;">
+  <p>Use this code to move SlipUpClipz Pro to the computer that requested the transfer.</p>
+  <p style="font-family:Consolas,monospace;font-size:20px;letter-spacing:0.08em;">${safeCode}</p>
+  <p>The code expires in 60 minutes and works once. It does not change your paid period.</p>
+  <p>If you did not request this, ignore the email. The previous computer stays registered.</p>
+</body>
+</html>`
+  return {
+    subject: 'Transfer SlipUpClipz Pro to another computer',
+    html,
+    text,
+  }
+}
+
+async function sendDeviceTransferEmail(fields) {
+  const content = buildDeviceTransferEmail(fields)
+  return sendResendEmail({
+    to: [fields.to],
+    reply_to: SUPPORT_EMAIL,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  })
+}
+
 module.exports = {
   escapeHtml,
   normalizeFromAddress,
   getEmailConfig,
   getSupportToEmail,
   buildSupportEmailPayload,
+  buildLicenseEmailHtml,
+  buildLicenseEmailText,
+  buildRenewalNoticeEmail,
+  buildBillingRecoveryEmail,
   sendLicenseEmail,
+  sendRenewalNoticeEmail,
+  sendBillingRecoveryEmail,
   sendSupportEmail,
 }

@@ -1,0 +1,9 @@
+SlipUpClipz is a Windows soundboard and instant-replay clip studio for games and voice chat.
+
+Record the last few seconds of microphone, game, or Discord audio, trim the moment, and play it from a soundboard. Route your microphone and soundboard together with a virtual audio cable. Global hotkeys, voice effects, Hear Myself, and Start with Windows are included.
+
+Free includes 7 soundboard pads. Pro includes 50 pads and AI Voice Clip Cloning.
+
+AI Voice Clip Cloning creates new English speech from a short recording of a speaker who gave permission. You can generate one clip or three variations, preview them, and save the ones you want. The voice engine runs on this computer when it is installed. It needs a supported NVIDIA GPU and a current NVIDIA driver. It does not require a separate Python installation or the CUDA development toolkit. This Store package does not download that engine.
+
+The soundboard, replay, hotkeys, and audio routing work without the voice engine.

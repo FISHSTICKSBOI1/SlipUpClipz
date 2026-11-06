@@ -37,6 +37,32 @@
     @apply bg-transparent;
   }
 
+  /*
+   * Windows paints the open <select> list on a white surface and inherits the
+   * control's light text, so names disappear until hover. Option colors are set
+   * explicitly. The closed control keeps its own text color.
+   */
+  select.device-select option {
+    background-color: #f4f1fb;
+    color: #1a1428;
+  }
+
+  select.device-select option:checked {
+    background-color: #5c43d6;
+    color: #ffffff;
+  }
+
+  select.device-select option:hover,
+  select.device-select option:focus {
+    background-color: #6d56e0;
+    color: #ffffff;
+  }
+
+  select.device-select option:disabled {
+    background-color: #eceaf2;
+    color: #6b6478;
+  }
+
   input[type='range'] {
     @apply h-1.5 cursor-pointer appearance-none rounded-full bg-surface-border accent-accent;
   }
@@ -73,8 +99,43 @@
     border-color: rgba(255, 255, 255, 0.05);
   }
 
+  /* The scrim stays translucent. Flatten the brighter top surface under it. */
+  body[data-modal-open] .app-shell {
+    background-image: none;
+  }
+
+  body[data-modal-open] .app-topbar {
+    background-color: #090b12;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .upgrade-highlight {
+    animation: upgrade-highlight 1.7s ease;
+  }
+
   .app-main {
     @apply min-w-0 flex-1 overflow-y-auto px-6 py-6 lg:px-8;
+    container-type: inline-size;
+    container-name: workspace;
+  }
+
+  /* Split only when the main column is wide enough. The window can be wider while the sidebar and details panel still leave a narrow column. */
+  .recorder-capture,
+  .recorder-tools,
+  .mixer-pair {
+    @apply grid;
+  }
+
+  @container workspace (min-width: 40rem) {
+    .recorder-capture {
+      grid-template-columns: 1.1fr 0.9fr;
+    }
+
+    .recorder-tools,
+    .mixer-pair {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   .app-brand {
@@ -219,5 +280,46 @@
   .stat-chip {
     @apply rounded-xl border bg-black/25 px-3 py-2;
     border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .generation-track {
+    @apply relative h-1.5 overflow-hidden rounded-full bg-white/10;
+  }
+
+  .generation-fill {
+    @apply h-full rounded-full;
+    background: linear-gradient(90deg, #5b3fd4, #7c5cff 55%, #9580ff);
+    transition: width 200ms linear;
+  }
+
+  .generation-indeterminate {
+    @apply absolute inset-y-0 w-2/5;
+    background: linear-gradient(90deg, transparent, #7c5cff, transparent);
+    animation: progress-slide 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes upgrade-highlight {
+  0%,
+  65% {
+    box-shadow:
+      0 0 0 1px rgba(124, 92, 255, 0.75),
+      0 0 28px rgba(124, 92, 255, 0.38);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(124, 92, 255, 0),
+      0 0 0 rgba(124, 92, 255, 0);
   }
 }

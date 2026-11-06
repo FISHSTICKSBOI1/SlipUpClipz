@@ -49,7 +49,8 @@ export function DemoSection() {
             See SlipUpClipz in action
           </h2>
           <p className="mt-4 text-base text-slate-400">
-            Funny moment → Clip hotkey → trim → soundboard pad → instant replay.
+            Funny moment → Clip hotkey → trim → soundboard pad → instant replay. This is a clipping
+            and soundboard demo, not a demonstration of AI Voice Clip Cloning.
           </p>
         </div>
 

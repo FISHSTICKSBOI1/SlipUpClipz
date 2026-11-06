@@ -36,7 +36,11 @@ export function getLaunchOnStartupState(): { openAtLogin: boolean } {
 }
 
 export function applySettingsPatch(partial: Partial<AppSettings>): AppSettings {
-  const next = setSettings(partial)
+  const safe = { ...partial }
+  if (app.isPackaged) {
+    delete safe.devProTesting
+  }
+  const next = setSettings(safe)
 
   if ('launchOnStartup' in partial) {
     applyLaunchOnStartup(next.launchOnStartup)

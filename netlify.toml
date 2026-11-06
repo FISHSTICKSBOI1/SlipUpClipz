@@ -15,3 +15,6 @@
   to = "/.netlify/functions/download-latest"
   status = 302
   force = true
+
+[functions."renewal-notices"]
+  schedule = "0 16 * * *"

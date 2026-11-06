@@ -1,7 +1,9 @@
 const { jsonResponse } = require('../lib/commerce.cjs')
 const { normalizeLicenseKey, isLicenseKeyFormat } = require('../lib/license.cjs')
 const { evaluateLicenseRecord } = require('../lib/license-validation.cjs')
-const { connectCommerceBlobs, getLicenseByKey } = require('../lib/storage.cjs')
+const { claimDeviceSeat, normalizeDeviceId } = require('../lib/device-seat.cjs')
+const { legacyDeviceValidationAllowed } = require('../lib/legacy-client.cjs')
+const { connectCommerceBlobs, getCommerceStore, getLicenseByKey } = require('../lib/storage.cjs')
 
 const STORE_NAME = process.env.COMMERCE_STORE_NAME || 'slipupclipz-commerce'
 
@@ -56,19 +58,89 @@ exports.handler = async (event) => {
   try {
     const record = await getLicenseByKey(licenseKey)
     const result = await evaluateLicenseRecord(record)
+    if (!result.valid) {
+      logValidationDiagnostics({
+        licenseKey,
+        recordFound: Boolean(record),
+        storedStatus: record?.status || null,
+        rejectionReason: result.rejectionReason || result.status || 'invalid',
+      })
+      return jsonResponse(200, {
+        valid: false,
+        tier: 'free',
+        expiresAt: result.expiresAt || null,
+        status: result.status || null,
+        serverNow: new Date().toISOString(),
+      })
+    }
+
+    const store = await getCommerceStore()
+    const deviceId = normalizeDeviceId(body.deviceId)
+    if (!deviceId) {
+      if (legacyDeviceValidationAllowed()) {
+        logValidationDiagnostics({
+          licenseKey,
+          recordFound: true,
+          storedStatus: record?.status || null,
+          rejectionReason: null,
+        })
+        return jsonResponse(200, {
+          valid: true,
+          tier: result.tier,
+          expiresAt: result.expiresAt || null,
+          status: result.status || 'active',
+          legacyClient: true,
+          serverNow: new Date().toISOString(),
+        })
+      }
+
+      logValidationDiagnostics({
+        licenseKey,
+        recordFound: true,
+        storedStatus: record?.status || null,
+        rejectionReason: 'device_required',
+      })
+      return jsonResponse(200, {
+        valid: false,
+        tier: 'free',
+        status: 'device_required',
+        serverNow: new Date().toISOString(),
+      })
+    }
+
+    const claim = await claimDeviceSeat(store, licenseKey, deviceId)
+    if (!claim.ok) {
+        const reason = claim.reason === 'device_in_use' ? 'device_in_use' : 'server_error'
+        logValidationDiagnostics({
+          licenseKey,
+          recordFound: true,
+          storedStatus: record?.status || null,
+          rejectionReason: reason,
+        })
+        if (reason === 'server_error') {
+          return jsonResponse(503, { error: 'License activation could not be saved. Try again.' })
+        }
+        return jsonResponse(200, {
+          valid: false,
+          tier: 'free',
+          status: 'device_in_use',
+          serverNow: new Date().toISOString(),
+        })
+      }
 
     logValidationDiagnostics({
       licenseKey,
       recordFound: Boolean(record),
       storedStatus: record?.status || null,
-      rejectionReason: result.valid ? null : result.rejectionReason || result.status || 'invalid',
+      rejectionReason: null,
     })
 
     return jsonResponse(200, {
-      valid: result.valid,
+      valid: true,
       tier: result.tier,
       expiresAt: result.expiresAt || null,
       status: result.status || null,
+      serverNow: new Date().toISOString(),
     })
   } catch (error) {
     logValidationDiagnostics({

@@ -1,0 +1,23 @@
+Certification notes for SlipUpClipz 0.1.6. Do not submit until the rollout in rollout.txt is ready.
+
+Package identity
+- Keep identity name SlipUpClipzLLC.SlipUpClipz.
+- Keep publisher CN=3B960933-E78C-4110-B2BE-9718E5AB5729.
+- Package version 1.0.6.0 replaces the installed 1.0.5.0 package in place.
+- Do not submit the website NSIS installer as this Store update.
+
+What to test
+- The app opens without the AI component. Recording, trimming, soundboard playback, hotkeys, and settings work.
+- AI Voice Clip Cloning is not in the base package. Store builds must not download an executable AI installer. The Settings page says the Store add-on is not available yet.
+- If you do not have an NVIDIA GPU, the soundboard still works.
+- Microphone capability is used for recording. Internet is used for license checks and, on the website build only, for app updates.
+- A Pro test key can be supplied in the Notes for certification field when you submit. Do not put a production customer key in the package.
+- Development Pro is disabled in this packaged build.
+
+AI add-on
+- Policy 10.1.5 allows an add-on that enhances described functionality, with consent, after the app is installed.
+- Policy 10.2.2 prohibits downloading code that changes the app into something other than the described product. This Store build therefore does not download Python or the voice model.
+- The compliant delivery for the voice engine is a Store optional package or related set, which needs Partner Center permission before it can be submitted. That add-on is not part of this package.
+- Disclose the NVIDIA GPU dependency at the start of the description. Disclose that the CUDA toolkit is not installed and that an NVIDIA driver is required.
+
+Do not publish GitHub latest.yml before this Store package is available to existing customers. The installed 0.1.5 Store app still checks GitHub and would otherwise offer the website installer.

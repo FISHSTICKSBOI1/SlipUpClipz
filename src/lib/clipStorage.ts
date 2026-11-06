@@ -2,6 +2,17 @@ import { sampleClips } from '../data/sampleClips'
 import type { Clip } from '../types/clip'
 
 const STORAGE_KEY = 'slipupclipz-clip-library'
+let clipLibraryUnreadable = false
+
+export function clipLibraryUnreadableState(): boolean {
+  return clipLibraryUnreadable
+}
+
+export function clipLibraryLoadError(): string | null {
+  return clipLibraryUnreadable
+    ? 'Saved clips could not be read. They were left on this PC and were not replaced.'
+    : null
+}
 
 /**
  * Development-only sample clips. Keep disabled in production so the Clip Library
@@ -22,20 +33,25 @@ export function loadClips(): Clip[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) {
+      clipLibraryUnreadable = false
       return ENABLE_DEV_SAMPLE_CLIPS ? sampleClips : []
     }
 
     const parsed = JSON.parse(raw) as Clip[]
     if (!Array.isArray(parsed)) {
-      return ENABLE_DEV_SAMPLE_CLIPS ? sampleClips : []
+      clipLibraryUnreadable = true
+      return []
     }
 
+    clipLibraryUnreadable = false
     return stripLegacySampleClips(parsed)
   } catch {
-    return ENABLE_DEV_SAMPLE_CLIPS ? sampleClips : []
+    clipLibraryUnreadable = true
+    return []
   }
 }
 
 export function saveClips(clips: Clip[]): void {
+  if (clipLibraryUnreadable) return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(clips))
 }

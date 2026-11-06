@@ -1,35 +1,56 @@
 const { getStripe, mapSubscriptionStatus } = require('./commerce.cjs')
 
-const ACTIVE_LICENSE_STATUSES = new Set(['active', 'trialing'])
+/**
+ * These statuses turn Pro off even if Stripe still reports the subscription as
+ * active. Cancellation is not in this set: cancel-at-period-end stays `active`
+ * in Stripe until the paid period ends.
+ */
+const HARD_REVOCATION_STATUSES = new Set(['refunded', 'revoked', 'disputed'])
+const ACTIVE_STRIPE_STATUSES = new Set(['active', 'trialing'])
 
-function isLicenseRecordRevoked(record) {
-  return ['refunded', 'revoked', 'disputed', 'canceled'].includes(record.status)
+function isHardRevoked(record) {
+  return Boolean(record) && typeof record === 'object' && HARD_REVOCATION_STATUSES.has(record.status)
 }
 
-async function resolveStripeSubscriptionStatus(stripeSubscriptionId) {
+function isLicenseRecordRevoked(record) {
+  if (!record || typeof record !== 'object') return false
+  return isHardRevoked(record) || record.status === 'canceled'
+}
+
+function periodStillOpen(expiresAt, now) {
+  const expiresMs = Date.parse(expiresAt)
+  if (!Number.isFinite(expiresMs)) return false
+  return expiresMs > now.getTime()
+}
+
+async function resolveStripeSubscriptionStatus(stripeSubscriptionId, stripeClient) {
   if (!stripeSubscriptionId) {
     return null
   }
 
-  const stripe = getStripe()
+  const stripe = stripeClient || getStripe()
   const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+  const expiresAt = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null
 
   return {
     status: mapSubscriptionStatus(subscription.status),
     stripeStatus: subscription.status,
-    expiresAt: subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000).toISOString()
-      : null,
-    isActive: ACTIVE_LICENSE_STATUSES.has(subscription.status),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+    expiresAt,
+    isActive: ACTIVE_STRIPE_STATUSES.has(subscription.status),
   }
 }
 
-async function evaluateLicenseRecord(record) {
+async function evaluateLicenseRecord(record, options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date()
+
   if (!record) {
     return { valid: false, tier: 'free', rejectionReason: 'record_not_found' }
   }
 
-  if (isLicenseRecordRevoked(record.status)) {
+  if (isHardRevoked(record)) {
     return {
       valid: false,
       tier: 'free',
@@ -41,9 +62,13 @@ async function evaluateLicenseRecord(record) {
   let expiresAt = record.expiresAt || null
   let status = record.status || 'unknown'
   let stripeActive = null
+  let cancelAtPeriodEnd = false
 
   if (record.stripeSubscriptionId) {
-    const subscription = await resolveStripeSubscriptionStatus(record.stripeSubscriptionId)
+    const subscription = await resolveStripeSubscriptionStatus(
+      record.stripeSubscriptionId,
+      options.stripe,
+    )
     if (!subscription) {
       return {
         valid: false,
@@ -54,8 +79,20 @@ async function evaluateLicenseRecord(record) {
     }
 
     status = subscription.status
-    expiresAt = subscription.expiresAt
+    expiresAt = subscription.expiresAt || null
     stripeActive = subscription.isActive
+    cancelAtPeriodEnd = subscription.cancelAtPeriodEnd
+
+    if (!expiresAt) {
+      return {
+        valid: false,
+        tier: 'free',
+        status,
+        expiresAt: null,
+        cancelAtPeriodEnd,
+        rejectionReason: 'missing_period_end',
+      }
+    }
 
     if (!subscription.isActive) {
       return {
@@ -63,10 +100,11 @@ async function evaluateLicenseRecord(record) {
         tier: 'free',
         status,
         expiresAt,
+        cancelAtPeriodEnd,
         rejectionReason: `subscription_inactive:${status}`,
       }
     }
-  } else if (record.status !== 'active') {
+  } else if (record.status !== 'active' && record.status !== 'trialing') {
     return {
       valid: false,
       tier: 'free',
@@ -76,16 +114,25 @@ async function evaluateLicenseRecord(record) {
     }
   }
 
-  if (expiresAt) {
-    const expiresMs = Date.parse(expiresAt)
-    if (Number.isFinite(expiresMs) && expiresMs <= Date.now()) {
-      return {
-        valid: false,
-        tier: 'free',
-        status: 'expired',
-        expiresAt,
-        rejectionReason: 'expired',
-      }
+  if (!expiresAt) {
+    return {
+      valid: false,
+      tier: 'free',
+      status,
+      expiresAt: null,
+      cancelAtPeriodEnd,
+      rejectionReason: 'missing_period_end',
+    }
+  }
+
+  if (!periodStillOpen(expiresAt, now)) {
+    return {
+      valid: false,
+      tier: 'free',
+      status: 'expired',
+      expiresAt,
+      cancelAtPeriodEnd,
+      rejectionReason: 'expired',
     }
   }
 
@@ -95,12 +142,15 @@ async function evaluateLicenseRecord(record) {
     status,
     expiresAt,
     stripeActive,
+    cancelAtPeriodEnd,
     rejectionReason: null,
   }
 }
 
 module.exports = {
+  HARD_REVOCATION_STATUSES,
   evaluateLicenseRecord,
   resolveStripeSubscriptionStatus,
   isLicenseRecordRevoked,
+  isHardRevoked,
 }

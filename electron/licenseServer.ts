@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import type { LicenseState } from '../shared/appTypes.js'
+import { getInstalledDeviceId } from './deviceId.js'
 import {
   assertLicenseEndpointSecure,
   getLicenseValidateUrl,
@@ -9,7 +10,9 @@ import {
   buildActivatedLicense,
   mapValidationFailureMessage,
   normalizeLicenseKey,
+  activationTimestamp,
   parseServerValidationPayload,
+  proValidationTimestamp,
   redactLicenseKey,
   type ServerValidationPayload,
 } from './licenseLogic.js'
@@ -22,6 +25,7 @@ export type LicenseValidationErrorCode =
   | 'timeout'
   | 'server_error'
   | 'malformed_response'
+  | 'device_in_use'
 
 export type LicenseValidationResult =
   | {
@@ -46,6 +50,14 @@ function mapFailureCode(status?: string | null, expiresAt?: string | null): Lice
     if (Number.isFinite(expiresMs) && expiresMs <= Date.now()) {
       return 'expired'
     }
+  }
+
+  if (status === 'device_in_use') {
+    return 'device_in_use'
+  }
+
+  if (status === 'device_required') {
+    return 'device_in_use'
   }
 
   if (
@@ -81,6 +93,8 @@ function userMessageForErrorCode(
       return 'Subscription inactive.'
     case 'malformed_response':
       return 'Temporary validation error. Please try again in a few minutes.'
+    case 'device_in_use':
+      return mapValidationFailureMessage(status)
     case 'invalid_key':
     default:
       return mapValidationFailureMessage(status, expiresAt)
@@ -112,7 +126,7 @@ export async function validateLicenseWithServer(key: string): Promise<LicenseVal
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ licenseKey: normalized }),
+      body: JSON.stringify({ licenseKey: normalized, deviceId: getInstalledDeviceId() }),
       signal: controller.signal,
     })
 
@@ -143,10 +157,22 @@ export async function validateLicenseWithServer(key: string): Promise<LicenseVal
     }
 
     if (parsed.valid && parsed.tier === 'pro') {
+      const validatedAt = proValidationTimestamp(parsed, activationTimestamp(response.headers.get('date')))
+      if (validatedAt === null) {
+        return {
+          ok: false,
+          errorCode: 'malformed_response',
+          message: userMessageForErrorCode('malformed_response'),
+          response: parsed,
+        }
+      }
       return {
         ok: true,
         response: parsed,
-        license: buildActivatedLicense(normalized, parsed.expiresAt),
+        license: {
+          ...buildActivatedLicense(normalized, parsed.expiresAt, validatedAt),
+          latestObservedAt: Math.max(Date.now(), validatedAt),
+        },
       }
     }
 

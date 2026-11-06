@@ -1,0 +1,9 @@
+SlipUpClipz captures recent microphone, game, or Discord audio, trims it, and plays it from a soundboard.
+
+Free includes 7 soundboard pads, global hotkeys, voice effects, Hear Myself, Start with Windows, and VB-Audio Virtual Cable routing.
+
+Pro includes 50 soundboard pads and AI Voice Clip Cloning. AI Voice Clip Cloning is optional. The soundboard works if you do not install it. It runs on your computer, needs a supported NVIDIA GPU, and asks for the speaker's permission before it creates a new clip. English is the language that has been tested. A generated voice may not sound like the original speaker.
+
+One Pro license works on one computer at a time. You can move it to another computer with the email confirmation already in the app. Clips stay on the computer where they were recorded.
+
+This update is for the existing SlipUpClipz package. Installing the website setup program over this Store app creates a second copy with a separate profile. Update this copy from the Microsoft Store.

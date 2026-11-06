@@ -1,3 +1,4 @@
+import './bootstrapUserData.js'
 import { app, BrowserWindow, session } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -5,6 +6,8 @@ import { getWindowsIconPath } from './appIcon.js'
 import { applyHiddenMenuBar, setupApplicationMenu, toggleWindowFullScreen } from './appMenu.js'
 import { openExternalUrl } from './externalLinks.js'
 import { registerClipHotkey, unregisterAllHotkeys } from './hotkeys.js'
+import { shutdownAiWorker } from './aiWorker.js'
+import { shutdownWindowsCaption } from './windowsCaption.js'
 import { registerIpcHandlers } from './ipcHandlers.js'
 import { initializeLicenseValidation, shutdownLicenseValidation } from './license.js'
 import { initializeStartupPreference } from './settings.js'
@@ -18,6 +21,7 @@ import {
   showMainWindow,
 } from './tray.js'
 import { destroyCaptureNotificationOverlay, isCaptureNotificationWindow } from './captureNotification.js'
+import { registerAiComponentIpc } from './aiComponentIpc.js'
 import { registerUpdaterIpc, setupAutoUpdater } from './updater.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -206,6 +210,7 @@ if (!gotSingleInstanceLock) {
 
   registerIpcHandlers(getMainWindow)
   registerUpdaterIpc(getMainWindow)
+  registerAiComponentIpc(getMainWindow)
   setTrayQuitHandler(requestAppQuit)
 
   app.whenReady().then(() => {
@@ -249,12 +254,20 @@ if (!gotSingleInstanceLock) {
     })
   })
 
-  app.on('before-quit', () => {
+  let aiWorkerStopped = false
+  app.on('before-quit', (event) => {
     intentionalQuitting = true
+    if (aiWorkerStopped) return
+    aiWorkerStopped = true
+    event.preventDefault()
+    void shutdownAiWorker().finally(() => {
+      app.quit()
+    })
   })
 
   app.on('will-quit', () => {
     intentionalQuitting = true
+    shutdownWindowsCaption()
     shutdownLicenseValidation()
     unregisterAllHotkeys()
     disableLoopbackCapture()

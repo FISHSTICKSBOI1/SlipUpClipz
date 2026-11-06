@@ -12,12 +12,13 @@ function getStripe() {
   return new Stripe(secretKey)
 }
 
-function jsonResponse(statusCode, body) {
+function jsonResponse(statusCode, body, extraHeaders = {}) {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   }

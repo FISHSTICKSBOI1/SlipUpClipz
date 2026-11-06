@@ -1,7 +1,5 @@
 import { app, ipcMain, Notification, type BrowserWindow } from 'electron'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { getDisplayedAppVersion } from './appVersion.js'
 import { openExternalUrl } from './externalLinks.js'
 import { registerClipHotkey, syncGlobalHotkeys } from './hotkeys.js'
 import {
@@ -11,8 +9,13 @@ import {
 } from './systemAudio.js'
 import {
   activateLicense,
+  confirmDeviceTransfer,
+  currentLicenseSnapshot,
   deactivateLicense,
   isProLicense,
+  publishLicenseState,
+  releaseStoredLicense,
+  requestDeviceTransfer,
 } from './license.js'
 import {
   applySettingsPatch,
@@ -27,18 +30,10 @@ import {
 import { setReplayBufferRecording, showMainWindow } from './tray.js'
 import { showCaptureNotificationOverlay } from './captureNotification.js'
 import { toggleWindowFullScreen } from './appMenu.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-function readAppVersion(): string {
-  try {
-    const pkgPath = path.join(__dirname, '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string }
-    return pkg.version ?? '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
+import { registerAiVoiceIpc } from './aiVoice.js'
+import { billingPortalEndpoint, requestBillingPortalSession } from './billingPortal.js'
+import { setWindowModalScrim } from './windowsCaption.js'
+import { authorizeRemoveSelection } from './removeSelectionGate.js'
 
 export function showAppNotification(title: string, body: string): void {
   if (!Notification.isSupported()) return
@@ -46,22 +41,28 @@ export function showAppNotification(title: string, body: string): void {
 }
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): void {
+  registerAiVoiceIpc(getMainWindow)
   ipcMain.handle('settings:get', () => getSettings())
 
   ipcMain.handle('settings:set', (_event, partial) => {
     const next = applySettingsPatch(partial)
-    if ('clipHotkey' in partial) {
+    if (partial && typeof partial === 'object' && 'clipHotkey' in partial) {
       registerClipHotkey(getMainWindow())
+    }
+    if (partial && typeof partial === 'object' && 'devProTesting' in partial && !app.isPackaged) {
+      publishLicenseState()
     }
     return next
   })
 
-  ipcMain.handle('license:get', () => {
-    const license = getLicense()
-    return {
-      license,
-      isPro: isProLicense(license),
+  ipcMain.handle('license:get', () => currentLicenseSnapshot())
+
+  ipcMain.handle('clips:authorizeRemoveSelection', (event) => {
+    const window = getMainWindow()
+    if (!window || event.sender.id !== window.webContents.id) {
+      return { ok: false as const, error: 'Unexpected request source.' }
     }
+    return authorizeRemoveSelection(isProLicense(getLicense()))
   })
 
   ipcMain.handle('license:activate', async (_event, key: string) => {
@@ -71,29 +72,68 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     }
 
     setLicense(result.license)
+    const snapshot = currentLicenseSnapshot()
     const window = getMainWindow()
     if (window && !window.isDestroyed()) {
-      window.webContents.send('license:changed', result.license)
+      window.webContents.send('license:changed', snapshot)
     }
 
-    return {
-      ok: true as const,
-      license: result.license,
-      isPro: isProLicense(result.license),
-    }
+    return { ok: true as const, ...snapshot }
   })
 
-  ipcMain.handle('license:deactivate', () => {
+  ipcMain.handle(
+    'license:open-billing-portal',
+    async (_event, payload: { licenseKey?: string; email?: string }) => {
+      const licenseKey = typeof payload?.licenseKey === 'string' ? payload.licenseKey : ''
+      const email = typeof payload?.email === 'string' ? payload.email : ''
+      const stored = getLicense()
+      if (
+        stored.devDemo &&
+        stored.key &&
+        licenseKey.trim().toUpperCase() === stored.key.trim().toUpperCase()
+      ) {
+        return { ok: false as const, error: 'Development demo keys cannot open billing.' }
+      }
+
+      const result = await requestBillingPortalSession({
+        endpoint: billingPortalEndpoint(app.isPackaged),
+        licenseKey,
+        email,
+      })
+      if (!result.ok) return result
+
+      openExternalUrl(result.url)
+      return { ok: true as const }
+    },
+  )
+
+  ipcMain.handle('license:deactivate', async () => {
+    const released = await releaseStoredLicense()
     const license = deactivateLicense()
     setLicense(license)
     syncGlobalHotkeys(getMainWindow(), [])
+    const snapshot = currentLicenseSnapshot()
 
     const window = getMainWindow()
     if (window && !window.isDestroyed()) {
-      window.webContents.send('license:changed', license)
+      window.webContents.send('license:changed', snapshot)
     }
 
-    return { ok: true as const, license, isPro: false }
+    return { ok: true as const, ...snapshot, warning: released.warning }
+  })
+
+  ipcMain.handle('license:request-transfer', (_event, payload: { licenseKey?: string; email?: string }) => {
+    return requestDeviceTransfer({
+      licenseKey: payload?.licenseKey ?? '',
+      email: payload?.email ?? '',
+    })
+  })
+
+  ipcMain.handle('license:confirm-transfer', (_event, payload: { licenseKey?: string; code?: string }) => {
+    return confirmDeviceTransfer({
+      licenseKey: payload?.licenseKey ?? '',
+      code: payload?.code ?? '',
+    })
   })
 
   ipcMain.handle('hotkeys:sync', (_event, bindings: HotkeyBinding[]) => {
@@ -101,8 +141,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
   })
 
   ipcMain.handle('app:getVersion', () => ({
-    // Prefer Electron's packaged version so the updater and UI stay aligned.
-    version: app.isPackaged ? app.getVersion() : readAppVersion(),
+    version: getDisplayedAppVersion(),
     platform: process.platform,
   }))
 
@@ -150,6 +189,11 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null): 
     const window = getMainWindow()
     toggleWindowFullScreen(window)
     return { isFullScreen: window?.isFullScreen() ?? false }
+  })
+
+  ipcMain.handle('window:setModalScrim', (_event, active: boolean, opacity?: number) => {
+    const scrim = typeof opacity === 'number' && Number.isFinite(opacity) ? opacity : 0.6
+    setWindowModalScrim(getMainWindow(), active === true, scrim)
   })
 
   ipcMain.handle('window:getState', () => {

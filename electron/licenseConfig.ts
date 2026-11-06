@@ -6,11 +6,20 @@ export const LICENSE_VALIDATE_URL_PRODUCTION =
 export const LICENSE_VALIDATE_URL_DEVELOPMENT =
   'http://localhost:8888/.netlify/functions/validate-license'
 
-/** Allow Pro offline for up to 7 days after the last successful online validation. */
-export const LICENSE_OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1000
+/**
+ * Offline cache limit. Pro can continue only until 24 hours after the last
+ * successful server validation, and never past the server expiration.
+ * Launching the app does not start this window over.
+ * A computer that is completely offline cannot be revoked remotely.
+ */
+export const LICENSE_OFFLINE_GRACE_MS = 24 * 60 * 60 * 1000
 
-/** Revalidate at most once every 12 hours during normal operation. */
-export const LICENSE_REVALIDATION_INTERVAL_MS = 12 * 60 * 60 * 1000
+/**
+ * While the app is running it asks the license server on this interval,
+ * and again at every launch. There is no push channel, so an online refund
+ * is applied on the next check rather than at the instant Stripe refunds.
+ */
+export const LICENSE_REVALIDATION_INTERVAL_MS = 15 * 60 * 1000
 
 /** Network timeout for license validation requests. */
 export const LICENSE_REQUEST_TIMEOUT_MS = 15_000
@@ -32,6 +41,14 @@ export function getLicenseValidateUrl(isPackaged: boolean): string {
   }
 
   return LICENSE_VALIDATE_URL_DEVELOPMENT
+}
+
+export function licenseFunctionUrl(isPackaged: boolean, functionName: string): string {
+  const validateUrl = getLicenseValidateUrl(isPackaged)
+  if (validateUrl.endsWith('/validate-license')) {
+    return `${validateUrl.slice(0, -'/validate-license'.length)}/${functionName}`
+  }
+  return validateUrl
 }
 
 export function assertLicenseEndpointSecure(url: string, isPackaged: boolean): void {

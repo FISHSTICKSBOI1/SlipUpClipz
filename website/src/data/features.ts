@@ -1,6 +1,19 @@
 export const FEATURE_SECTIONS = [
   {
+    id: 'ai-voice',
+    kind: 'ai' as const,
+    title: 'AI Voice Clip Cloning',
+    points: [
+      'Generate new English speech from a recording of a speaker who gave permission',
+      'Generate one clip, or three variations',
+      'Preview each variation and save the ones you select',
+      'Send generated clips to the soundboard',
+      'Runs locally with Qwen3-TTS 0.6B on a compatible NVIDIA GPU',
+    ],
+  },
+  {
     id: 'replay',
+    kind: 'screenshot' as const,
     title: 'Instant replay clipping',
     points: [
       'Keep the last few seconds of mic, Discord, or game audio ready',
@@ -12,6 +25,7 @@ export const FEATURE_SECTIONS = [
   },
   {
     id: 'trim',
+    kind: 'screenshot' as const,
     title: 'Waveform trimming',
     points: [
       'See the clip as a clear waveform',
@@ -23,31 +37,34 @@ export const FEATURE_SECTIONS = [
   },
   {
     id: 'soundboard',
+    kind: 'screenshot' as const,
     title: 'Soundboard and hotkeys',
     points: [
-      'Drop clips onto pads and fire them instantly',
-      'Import MP3 and WAV, set per-pad volume, and Stop All when needed',
-      'Use in-app hotkeys free, or global hotkeys with Pro',
+      'Free includes 7 pads. Pro includes 50',
+      'Drop clips onto pads, import MP3 and WAV, and set per-pad volume',
+      'Global hotkeys are included, including on the Free plan',
     ],
     imageKey: 'soundboard' as const,
     imageAlt: 'SlipUpClipz soundboard with pads, categories, and playback controls',
   },
   {
     id: 'routing',
+    kind: 'screenshot' as const,
     title: 'Virtual microphone routing',
     points: [
       'Mix your live mic and soundboard into one output',
       'Send that mix to Discord or supported game voice chats',
-      'Works with supported virtual audio devices like VB-Cable',
+      'VB-Audio Virtual Cable routing is included on the Free plan',
     ],
     imageKey: 'settings' as const,
     imageAlt: 'SlipUpClipz Settings showing audio devices and virtual microphone routing',
   },
   {
     id: 'effects',
+    kind: 'screenshot' as const,
     title: 'Voice effects',
     points: [
-      'Deep, Squeaky, Radio, and Robot presets',
+      'Deep, Squeaky, Radio, and Robot presets are included',
       'Fine-tune pitch and bass',
       'Monitor with Hear Myself before you go live',
     ],
@@ -56,11 +73,12 @@ export const FEATURE_SECTIONS = [
   },
   {
     id: 'background',
+    kind: 'screenshot' as const,
     title: 'Background operation and tray support',
     points: [
       'Keep the replay buffer running while you game',
       'Minimize to tray and stay out of the way',
-      'Launch on startup with Pro so the board is ready',
+      'Start with Windows is included, so the board can be ready when you log in',
     ],
     imageKey: 'onboarding' as const,
     imageAlt: 'SlipUpClipz guided onboarding overlay introducing the main workspace',
@@ -84,4 +102,22 @@ export const WORKFLOW_STEPS = [
     title: 'Replay',
     body: 'Trigger it instantly — by click or hotkey.',
   },
+] as const
+
+export const FREE_PLAN_FEATURES = [
+  'Instant replay audio clipping',
+  'Recording, trimming, and clip library',
+  '7 soundboard pads',
+  'Global hotkeys',
+  'VB-Audio Virtual Cable routing',
+  'Start with Windows',
+  'Voice effects and Hear Myself',
+] as const
+
+export const PRO_PLAN_FEATURES = [
+  'Everything in Free',
+  '50 soundboard pads',
+  'Local AI Voice Clip Cloning with Qwen3-TTS 0.6B',
+  '0.8–7 second English reference clips',
+  'One generation, or three variations you can preview and save',
 ] as const

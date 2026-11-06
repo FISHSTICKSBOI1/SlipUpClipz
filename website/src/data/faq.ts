@@ -49,17 +49,32 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'Does it work in the background?',
     answer:
-      'Yes. The replay buffer can keep running while you game. Pro unlocks global hotkeys, minimize-to-tray behavior, and launch on startup for background use.',
+      'Yes. The replay buffer can keep running while you game. Global hotkeys, minimize to tray, and Start with Windows are included on the Free plan. Turn global hotkeys on in Settings if a shortcut should work while another app is focused.',
+  },
+  {
+    question: 'What is included in Free and Pro?',
+    answer:
+      'Free includes instant replay clipping, recording, trimming, the clip library, 7 soundboard pads, global hotkeys, VB-Audio Virtual Cable routing, Start with Windows, voice effects, and Hear Myself. Pro includes everything in Free, plus 50 soundboard pads and local AI Voice Clip Cloning. AI Voice Clip Cloning ships with desktop v0.1.6. The published v0.1.5 download does not include it.',
+  },
+  {
+    question: 'How does AI Voice Clip Cloning work?',
+    answer:
+      'Pro in v0.1.6 can clone a voice locally with Qwen3-TTS 0.6B from a 0.8–7 second reference. English is the language we have tested. The speaker has to give permission. You can generate one clip, or three variations, then preview and save any combination. It needs a compatible NVIDIA GPU. It does not work on every graphics card, it does not guarantee the result will sound like the speaker, and generating a clip uses the GPU while it runs.',
   },
   {
     question: 'Will it affect game performance?',
     answer:
-      'SlipUpClipz is designed to stay lightweight while buffering recent audio. Impact varies by PC, but it does not record video and avoids heavy background work. Close unused audio apps if you notice contention.',
+      'Clipping and the soundboard are built to stay light while you play, and SlipUpClipz does not record video. AI Voice Clip Cloning is different: it loads a local model on a compatible NVIDIA GPU and uses that GPU while generating. The model is not a zero-cost background feature. Close unused audio apps if you notice contention.',
   },
   {
     question: 'Is Pro a subscription?',
     answer:
-      'Yes. SlipUpClipz Pro is $4.99 USD per year with automatic yearly renewal. You keep the same license key across renewals. Cancel anytime from your Stripe billing portal link in the license email.',
+      'Yes. SlipUpClipz Pro is an annual subscription, advertised at $4.99 USD per year, with automatic yearly renewal at the regular price. You keep the same license key across renewals. About 15 to 45 days before each renewal, we email the renewal date, the renewal amount, and how to cancel. To cancel, open Manage subscription on the pricing page. You do not need the app. Enter the license key and checkout email, or request a one-time link if you lost the key. Canceling stops the next charge and Pro stays through the period you already paid. A full refund of the current year ends Pro and stops future charges. Removing the license from a computer does not cancel billing. Checkout shows the exact charge before you pay.',
+  },
+  {
+    question: 'How does the $1 survey discount work?',
+    answer:
+      'Complete the short survey on the pricing page, submit it, and then claim the thank-you. That thank-you is $1 off the first year of a new Pro subscription bought through Stripe on this website. If the regular price is $4.99, the first year is $3.99 and later years return to $4.99. The discount applies once, to the first invoice only, and it cannot be applied twice on the same checkout. It does not apply to Microsoft Store purchases. You can buy Pro at the regular price without the survey. If someone already shared a code with you, you can type it on the Stripe checkout page.',
   },
   {
     question: 'How do automatic updates work?',

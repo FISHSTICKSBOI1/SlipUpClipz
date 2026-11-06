@@ -2,7 +2,21 @@ const { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } = requ
 const { join } = require('node:path')
 
 const STORE_NAME = process.env.COMMERCE_STORE_NAME || 'slipupclipz-commerce'
-const DEV_STORE_DIR = join(__dirname, '../../.netlify/commerce-dev')
+function devStoreDir() {
+  return process.env.COMMERCE_DEV_DIR || join(__dirname, '../../.netlify/commerce-dev')
+}
+
+function ensureDevDir() {
+  const dir = devStoreDir()
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+}
+
+function devStorePath(key) {
+  const safeKey = key.replace(/[^a-zA-Z0-9:_-]/g, '_')
+  return join(devStoreDir(), `${safeKey}.json`)
+}
 
 function isDeployedNetlifyRuntime() {
   // Deployed Netlify Functions expose SITE_ID. Do not use build-only vars
@@ -68,10 +82,25 @@ function wrapBlobStore(store, environment) {
       return store.set(key, value, options)
     },
     async setJSON(key, value, options) {
+      const conditional = Boolean(options?.onlyIfNew || options?.onlyIfMatch)
+      // @netlify/blobs 10.7.9 Store.setJSON spreads onlyIfNew/onlyIfMatch onto
+      // makeRequest, but makeRequest only reads a nested `conditions` object.
+      // The If-None-Match and If-Match headers are never sent, so two concurrent
+      // setJSON calls can both succeed. Store.set passes `conditions` correctly.
+      if (conditional && typeof store.set === 'function') {
+        return store.set(key, JSON.stringify(value), options)
+      }
       return store.setJSON(key, value, options)
     },
     async getJSON(key) {
       return store.get(key, { type: 'json' })
+    },
+    async getWithMetadata(key) {
+      if (typeof store.getWithMetadata !== 'function') {
+        const data = await store.get(key, { type: 'json' })
+        return data ? { data, etag: undefined } : null
+      }
+      return store.getWithMetadata(key, { type: 'json' })
     },
     async delete(key) {
       await store.delete(key)
@@ -82,15 +111,20 @@ function wrapBlobStore(store, environment) {
   }
 }
 
-function ensureDevDir() {
-  if (!existsSync(DEV_STORE_DIR)) {
-    mkdirSync(DEV_STORE_DIR, { recursive: true })
-  }
-}
+const devWriteTails = new Map()
+const devEtags = new Map()
 
-function devStorePath(key) {
-  const safeKey = key.replace(/[^a-zA-Z0-9:_-]/g, '_')
-  return join(DEV_STORE_DIR, `${safeKey}.json`)
+function enqueueDevWrite(key, task) {
+  const previous = devWriteTails.get(key) || Promise.resolve()
+  const run = previous.then(task, task)
+  devWriteTails.set(
+    key,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  )
+  return run
 }
 
 function createDevStore() {
@@ -125,24 +159,35 @@ function createDevStore() {
       return { modified: true }
     },
     async setJSON(key, value, options = {}) {
-      if (options.onlyIfNew) {
+      return enqueueDevWrite(key, async () => {
         const existing = await this.getJSON(key)
-        if (existing != null) {
+        const currentEtag = existing ? devEtags.get(key) || 'dev-existing' : undefined
+        if (options.onlyIfMatch && options.onlyIfMatch !== currentEtag) {
           return { modified: false }
         }
-      }
+        if (options.onlyIfNew && existing != null) {
+          return { modified: false }
+        }
 
-      await this.set(
-        key,
-        JSON.stringify({
-          ...value,
-          _storeEnvironment: 'dev-local',
-        }),
-      )
-      return { modified: true }
+        const etag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+        devEtags.set(key, etag)
+        await this.set(
+          key,
+          JSON.stringify({
+            ...value,
+            _storeEnvironment: 'dev-local',
+          }),
+        )
+        return { modified: true, etag }
+      })
     },
     async getJSON(key) {
       return this.get(key, { type: 'json' })
+    },
+    async getWithMetadata(key) {
+      const data = await this.getJSON(key)
+      if (!data) return null
+      return { data, etag: devEtags.get(key) || 'dev-existing' }
     },
     async delete(key) {
       const filePath = devStorePath(key)
@@ -153,7 +198,7 @@ function createDevStore() {
     async list(options) {
       ensureDevDir()
       const prefix = options?.prefix || ''
-      const files = readdirSync(DEV_STORE_DIR).filter((file) => file.endsWith('.json'))
+      const files = readdirSync(devStoreDir()).filter((file) => file.endsWith('.json'))
 
       return {
         blobs: files
@@ -271,6 +316,28 @@ async function getLicenseByChargeId(chargeId) {
   return store.getJSON(`license:${pointer.licenseKey}`)
 }
 
+async function getLicenseByEmail(email) {
+  const store = await getCommerceStore()
+  const normalized = String(email || '').trim().toLowerCase()
+  if (!normalized) return null
+  const pointer = await store.getJSON(`email:${normalized}`)
+  if (!pointer?.licenseKey) return null
+  return store.getJSON(`license:${pointer.licenseKey}`)
+}
+
+async function listLicenseRecords() {
+  const store = await getCommerceStore()
+  const listed = await store.list({ prefix: 'license:' })
+  const blobs = Array.isArray(listed?.blobs) ? listed.blobs : []
+  const records = []
+  for (const blob of blobs) {
+    if (!blob?.key) continue
+    const record = await store.getJSON(blob.key)
+    if (record?.licenseKey) records.push(record)
+  }
+  return records
+}
+
 async function getLicenseByPaymentIntentId(paymentIntentId) {
   const store = await getCommerceStore()
   const pointer = await store.getJSON(`payment-intent:${paymentIntentId}`)
@@ -354,9 +421,12 @@ module.exports = {
   saveLicenseRecord,
   getLicenseBySubscriptionId,
   getLicenseByChargeId,
+  getLicenseByEmail,
+  listLicenseRecords,
   getLicenseByPaymentIntentId,
   recordAffiliateCommission,
   adjustAffiliateCommission,
   isNetlifyProduction,
   isDeployedNetlifyRuntime,
+  wrapBlobStore,
 }

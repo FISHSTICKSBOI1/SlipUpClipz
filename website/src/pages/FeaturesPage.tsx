@@ -1,3 +1,4 @@
+import { AiVoicePanel } from '../components/AiVoicePanel'
 import { ScreenshotFrame } from '../components/ScreenshotFrame'
 import { SectionHeading } from '../components/SectionHeading'
 import { Seo } from '../components/Seo'
@@ -10,7 +11,7 @@ export function FeaturesPage() {
     <>
       <Seo
         title="Features — SlipUpClipz"
-        description="Instant replay clipping, waveform trimming, soundboard hotkeys, virtual mic routing, voice effects, and tray support."
+        description="Instant replay clipping, waveform trimming, soundboard hotkeys, virtual mic routing, voice effects, tray support, and local AI Voice Clip Cloning."
         path={SITE.paths.features}
       />
 
@@ -19,12 +20,19 @@ export function FeaturesPage() {
           <SectionHeading
             eyebrow="Features"
             title="Everything you need to clip and replay the moment"
-            description="Alternating walkthrough of the core SlipUpClipz workflow — no fluff, just what ships today."
+            description="Clip the moment, trim it, and replay it from the soundboard. Pro adds local AI Voice Clip Cloning."
           />
 
           <div className="mt-14 space-y-20 lg:space-y-28">
             {FEATURE_SECTIONS.map((feature, index) => {
               const imageLeft = index % 2 === 1
+              if (feature.kind === 'ai') {
+                return (
+                  <article key={feature.id} id={feature.id} className="scroll-mt-28">
+                    <AiVoicePanel heading="feature" />
+                  </article>
+                )
+              }
               return (
                 <article
                   key={feature.id}

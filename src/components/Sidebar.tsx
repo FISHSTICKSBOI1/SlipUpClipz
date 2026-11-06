@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useAppVersion } from '../hooks/useAppVersion'
 import { NavLink } from 'react-router-dom'
 import { useAppSettings } from '../context/AppSettingsContext'
+import { useLicense } from '../context/LicenseContext'
 import { QUICK_TIP_ROTATE_MS, QUICK_TIPS } from '../data/quickTips'
 import {
   HomeIcon,
@@ -18,6 +20,7 @@ const navItems = [
 
 export function Sidebar() {
   const { settings } = useAppSettings()
+  const { access } = useLicense()
   const compact = settings.compactSidebar
   const [tipIndex, setTipIndex] = useState(0)
 
@@ -30,6 +33,7 @@ export function Sidebar() {
   }, [compact])
 
   const tip = QUICK_TIPS[tipIndex] ?? QUICK_TIPS[0]
+  const appVersion = useAppVersion()
 
   return (
     <aside
@@ -105,8 +109,15 @@ export function Sidebar() {
             compact ? 'justify-center' : 'justify-between gap-2 px-1'
           }`}
         >
-          <span className="badge-accent">v0.1.3</span>
-          {!compact && <span className="text-[10px] font-medium text-ink-faint">Desktop</span>}
+          <span className="badge-accent">{appVersion ? `v${appVersion}` : 'v…'}</span>
+          {access === 'development' && (
+            <span className="badge-amber" title="Development Pro. Not a customer license.">
+              Dev Pro
+            </span>
+          )}
+          {!compact && access !== 'development' && (
+            <span className="text-[10px] font-medium text-ink-faint">Desktop</span>
+          )}
         </div>
       </div>
     </aside>

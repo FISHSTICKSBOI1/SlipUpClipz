@@ -1,0 +1,12 @@
+Version 0.1.6
+
+What's new
+- The soundboard, replay, hotkeys, and audio routing are in this Microsoft Store package. This package does not include the voice engine and does not download it.
+- Website installations can install the voice engine from a checksum-verified component. The app still works before that component is installed.
+- In-place upgrade from 0.1.5 keeps clips, soundboard pads, hotkeys, settings, and an existing Pro license.
+- Store installations update through the Microsoft Store. They do not download the website installer.
+
+What stayed the same
+- Free: 7 pads, global hotkeys, VB-Audio Cable routing, voice effects, Hear Myself, and Start with Windows.
+- Pro: 50 pads and AI Voice Clip Cloning.
+- One Pro license works on one computer at a time. The paid period still comes from the subscription and does not change because of this update.

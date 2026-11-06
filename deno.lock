@@ -11,6 +11,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@netlify/blobs@^10.7.9",
         "npm:@types/react-dom@^19.1.6",
         "npm:@types/react@^19.1.8",
         "npm:@vitejs/plugin-react@^4.6.0",
@@ -23,6 +24,7 @@
         "npm:react-dom@^19.1.0",
         "npm:react-router-dom@^7.6.3",
         "npm:react@^19.1.0",
+        "npm:stripe@^17.7.0",
         "npm:tailwindcss@^3.4.17",
         "npm:typescript@^5.8.3",
         "npm:vite-plugin-electron-renderer@~0.14.6",

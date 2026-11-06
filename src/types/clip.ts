@@ -9,6 +9,8 @@ export type Clip = {
   hasAudio?: boolean
   mimeType?: string
   isDraft?: boolean
+  /** Indicates synthetic speech; displayed as AI-generated in the library. */
+  aiGenerated?: boolean
   /** Where the clip came from. Older clips without this are treated as recorded. */
   source?: ClipSource
   /** Original filename for imported audio. */

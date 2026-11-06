@@ -35,7 +35,7 @@ export function RightPanel() {
   const hotkeyCount = clips.filter((c) => c.hotkey).length
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l border-white/5 bg-[#0a0c14]/95 2xl:w-80">
+    <aside className="hidden w-72 shrink-0 flex-col border-l border-white/5 bg-[#0a0c14]/95 xl:flex 2xl:w-80">
       <div className="border-b border-white/5 px-5 py-4">
         <p className="control-label">Details</p>
         <h2 className="mt-1 section-title">Workspace</h2>

@@ -23,7 +23,7 @@ export function HowItWorksPage() {
           <SectionHeading
             eyebrow="How it works"
             title="Capture → Trim → Add → Replay"
-            description="Four beats. Under ten seconds to understand. Built for Discord chaos and ranked banter."
+            description="Four beats for the soundboard. Pro can also create new speech from a short reference with AI Voice Clip Cloning, with the speaker’s permission."
           />
 
           <div className="mt-10">

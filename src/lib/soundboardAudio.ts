@@ -1,3 +1,17 @@
+import { applyAudioRoute, type AudioRouteHost, type MicTarget } from '@shared/audioRouteController'
+import {
+  graphsToCreate,
+  playbackTargets,
+  type AudioRoutePlan,
+} from '@shared/gamingAudioRouting'
+import { LOCAL_PAD_GAIN_MAX, VOICE_MIC_GAIN_MAX, VOICE_PAD_GAIN_MAX } from '@shared/voiceMixDiagnostics'
+import {
+  captureDeviceMatches,
+  microphoneTrackConstraints,
+  microphoneUnavailableMessage,
+  normalizeAudioInputDeviceId,
+  openedWrongMicrophoneMessage,
+} from '@shared/replayCapture'
 import { getAudioBlob } from './audioStorage'
 import { padVolumeToGain } from './soundboardStorage'
 import {
@@ -14,6 +28,9 @@ import {
 } from './voiceEffects'
 
 const bufferCache = new Map<string, AudioBuffer>()
+const bufferOrigin = new WeakMap<AudioBuffer, AudioContext>()
+const buffersByContext = new WeakMap<AudioContext, Map<string, { buffer: AudioBuffer; version: number }>>()
+const clipAudioVersion = new Map<string, number>()
 const activeSources = new Set<AudioBufferSourceNode>()
 
 type PlaybackInstance = {
@@ -53,11 +70,9 @@ export function subscribePlaybackState(listener: () => void): () => void {
 }
 
 function currentPlaybackRoute(): PlaybackRoute {
-  if (shouldUseSeparateMonitor()) return 'both'
-  if (streamDeviceId && monitorDeviceId && streamDeviceId !== monitorDeviceId) {
-    return hearMyselfEnabled ? 'both' : 'virtual'
-  }
-  if (hearMyselfEnabled) return 'monitor'
+  const targets = playbackTargets(activePlan)
+  if (targets.voicePads && targets.localPads) return 'both'
+  if (targets.localPads) return 'monitor'
   return streamDeviceId ? 'virtual' : 'monitor'
 }
 
@@ -121,27 +136,49 @@ type VoiceChain = {
 type MixGraph = {
   micGain: GainNode
   soundboardGain: GainNode
-  compressor: DynamicsCompressorNode
-  voiceChain: VoiceChain
+  microphoneMeter: AnalyserNode
+  soundboardMeter: AnalyserNode
+  compressor: DynamicsCompressorNode | null
+  voiceChain: VoiceChain | null
+  micEntry: AudioNode
+  protectWithoutDucking: boolean
 }
 
 type MicCapture = {
   stream: MediaStream
   source: MediaStreamAudioSourceNode
+  tap: MediaStreamAudioDestinationNode | null
+  tapSource: MediaStreamAudioSourceNode | null
 }
 
+const idlePlan: AudioRoutePlan = {
+  mode: 'legacy',
+  voiceSinkId: null,
+  voiceSinkExplicit: false,
+  voiceMicrophone: false,
+  voicePads: true,
+  protectWithoutDucking: false,
+  localEnabled: false,
+  localSinkId: null,
+  localSinkExplicit: false,
+  localMicrophone: false,
+  localPads: false,
+  microphoneDeviceId: null,
+  keepVoiceGraphHot: false,
+}
+
+let activePlan: AudioRoutePlan = idlePlan
+let lastGoodPlan: AudioRoutePlan | null = null
 let streamContext: AudioContext | null = null
 let monitorContext: AudioContext | null = null
 let streamGraph: MixGraph | null = null
 let monitorGraph: MixGraph | null = null
 let streamMicCapture: MicCapture | null = null
-let monitorMicCapture: MicCapture | null = null
 
 let streamDeviceId: string | null = null
-let monitorDeviceId: string | null = null
-let hearMyselfEnabled = true
+let configuredMicrophoneId: string | null = null
+let followedMicrophoneId: string | null = null
 
-let mixerMicrophoneEnabled = false
 let mixerMicrophoneVolume = 75
 let mixerSoundboardVolume = 100
 
@@ -165,12 +202,6 @@ function logVoice(event: string, details?: Record<string, unknown>): void {
     console.info(`[voice] ${event}`)
   }
 }
-const MIC_CAPTURE_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: false,
-  noiseSuppression: false,
-  autoGainControl: false,
-}
-
 function volumeToGain(percent: number): number {
   const clamped = Math.max(0, Math.min(100, percent))
   return (clamped / 100) * 0.9
@@ -226,15 +257,33 @@ const RADIO_CURVE = createRadioCurve()
 const IDENTITY_CURVE = createIdentityCurve()
 
 
-async function applySinkId(
-  context: SinkCapableAudioContext,
-  deviceId: string | null,
+async function applyExplicitSink(
+  context: AudioContext,
+  sinkId: string | null,
+  explicit: boolean,
 ): Promise<void> {
-  if (!deviceId || !context.setSinkId) return
+  const sink = context as SinkCapableAudioContext
+  if (!sinkId) {
+    if (explicit) {
+      throw new Error('Choose a playback device. SlipUpClipz did not switch to the Windows default.')
+    }
+    return
+  }
+  if (!sink.setSinkId) {
+    throw new Error('Playback device selection is unavailable. SlipUpClipz did not switch devices.')
+  }
   try {
-    await context.setSinkId(deviceId)
+    await sink.setSinkId(sinkId)
   } catch {
-    // Device may have been disconnected; caller falls back to default output.
+    throw new Error(
+      'The selected playback device could not be opened. SlipUpClipz did not switch to the Windows default.',
+    )
+  }
+  const actual = (sink as AudioContext & { sinkId?: string }).sinkId
+  if (typeof actual === 'string' && actual !== '' && actual !== sinkId) {
+    throw new Error(
+      'The voice-chat output did not switch to the selected device. SlipUpClipz did not leave it on the Windows default.',
+    )
   }
 }
 
@@ -245,14 +294,27 @@ async function closeAudioContext(context: AudioContext | null): Promise<void> {
 
 function stopMicCapture(capture: MicCapture | null): MicCapture | null {
   if (!capture) return null
-  capture.source.disconnect()
+  try {
+    capture.tapSource?.disconnect()
+  } catch {
+    // Already disconnected.
+  }
+  try {
+    capture.tap?.disconnect()
+  } catch {
+    // Already disconnected.
+  }
+  try {
+    capture.source.disconnect()
+  } catch {
+    // Already disconnected.
+  }
   capture.stream.getTracks().forEach((track) => track.stop())
   return null
 }
 
 function stopAllMicrophoneCaptures(): void {
   streamMicCapture = stopMicCapture(streamMicCapture)
-  monitorMicCapture = stopMicCapture(monitorMicCapture)
 }
 
 function disposeVoiceChain(chain: VoiceChain | null): void {
@@ -564,129 +626,323 @@ export function getVoiceEffectsRuntimeStatus(): VoiceEffectsRuntimeStatus {
   return { workletAvailable: true, message: null }
 }
 
-async function createMixGraph(context: AudioContext): Promise<MixGraph> {
+function cappedGain(percent: number, max: number): number {
+  return (Math.max(0, Math.min(100, percent)) / 100) * max
+}
+
+function createMeter(context: AudioContext): AnalyserNode {
+  const meter = context.createAnalyser()
+  meter.fftSize = 1024
+  meter.smoothingTimeConstant = 0
+  return meter
+}
+
+function connectMeter(source: AudioNode, meter: AnalyserNode, destination: AudioNode): void {
+  source.connect(meter)
+  meter.connect(destination)
+}
+
+async function createMixGraph(context: AudioContext, protectWithoutDucking: boolean): Promise<MixGraph> {
   const micGain = context.createGain()
   const soundboardGain = context.createGain()
+  const microphoneMeter = createMeter(context)
+  const soundboardMeter = createMeter(context)
+
+  if (protectWithoutDucking) {
+    const safety = context.createDynamicsCompressor()
+    safety.threshold.value = -1.5
+    safety.knee.value = 0
+    safety.ratio.value = 20
+    safety.attack.value = 0.002
+    safety.release.value = 0.05
+    const sum = context.createGain()
+    connectMeter(micGain, microphoneMeter, sum)
+    connectMeter(soundboardGain, soundboardMeter, sum)
+    sum.connect(safety)
+    safety.connect(context.destination)
+    return {
+      micGain,
+      soundboardGain,
+      microphoneMeter,
+      soundboardMeter,
+      compressor: safety,
+      voiceChain: null,
+      micEntry: micGain,
+      protectWithoutDucking: true,
+    }
+  }
+
   const compressor = context.createDynamicsCompressor()
   const voiceChain = createVoiceChain(context)
-
   compressor.threshold.value = -14
   compressor.knee.value = 8
   compressor.ratio.value = 3
   compressor.attack.value = 0.003
   compressor.release.value = 0.2
-
   voiceChain.output.connect(micGain)
-  micGain.connect(compressor)
-  soundboardGain.connect(compressor)
+  connectMeter(micGain, microphoneMeter, compressor)
+  connectMeter(soundboardGain, soundboardMeter, compressor)
   compressor.connect(context.destination)
-
   await attachPitchNode(context, voiceChain)
   applyVoiceChainSettings(voiceChain)
-
-  return { micGain, soundboardGain, compressor, voiceChain }
+  return {
+    micGain,
+    soundboardGain,
+    microphoneMeter,
+    soundboardMeter,
+    compressor,
+    voiceChain,
+    micEntry: voiceChain.input,
+    protectWithoutDucking: false,
+  }
 }
 
-function applyMixerGains(graph: MixGraph | null): void {
+function applyMixerGains(graph: MixGraph | null, role: 'voice' | 'local'): void {
   if (!graph) return
-  graph.micGain.gain.value = mixerMicrophoneEnabled ? volumeToGain(mixerMicrophoneVolume) : 0
+  const micIncluded = role === 'voice' ? activePlan.voiceMicrophone : activePlan.localMicrophone
+  if (graph.protectWithoutDucking) {
+    graph.micGain.gain.value = micIncluded ? cappedGain(mixerMicrophoneVolume, VOICE_MIC_GAIN_MAX) : 0
+    graph.soundboardGain.gain.value = cappedGain(
+      mixerSoundboardVolume,
+      role === 'voice' ? VOICE_PAD_GAIN_MAX : LOCAL_PAD_GAIN_MAX,
+    )
+    return
+  }
+  graph.micGain.gain.value = micIncluded ? volumeToGain(mixerMicrophoneVolume) : 0
   graph.soundboardGain.gain.value = volumeToGain(mixerSoundboardVolume)
 }
 
-async function resetAudioContexts(): Promise<void> {
-  stopAllMicrophoneCaptures()
+async function closeVoiceGraph(): Promise<void> {
   disposeVoiceChain(streamGraph?.voiceChain ?? null)
-  disposeVoiceChain(monitorGraph?.voiceChain ?? null)
   await closeAudioContext(streamContext)
-  await closeAudioContext(monitorContext)
   streamContext = null
-  monitorContext = null
   streamGraph = null
+}
+
+async function closeLocalGraph(): Promise<void> {
+  disposeVoiceChain(monitorGraph?.voiceChain ?? null)
+  await closeAudioContext(monitorContext)
+  monitorContext = null
   monitorGraph = null
-  logVoice('graph:contexts-destroyed')
 }
 
-function shouldUseSeparateMonitor(): boolean {
-  if (!hearMyselfEnabled) return false
-  if (!streamDeviceId) return false
-  return streamDeviceId !== monitorDeviceId
+async function resumeContext(context: AudioContext | null): Promise<void> {
+  const state = context?.state as string | undefined
+  if (!context || (state !== 'suspended' && state !== 'interrupted')) return
+  try {
+    await context.resume()
+  } catch {
+    // A later click resumes playback. The device selection is left unchanged.
+  }
 }
 
-async function acquireMicrophoneCapture(context: AudioContext): Promise<MicCapture> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: MIC_CAPTURE_CONSTRAINTS,
-  })
-  const source = context.createMediaStreamSource(stream)
-  return { stream, source }
+function createRoutedContext(sinkId: string | null, explicit: boolean): AudioContext {
+  if (!(explicit && sinkId)) return new AudioContext()
+  try {
+    return new AudioContext({ sinkId } as AudioContextOptions)
+  } catch (error) {
+    if (error instanceof TypeError) return new AudioContext()
+    throw error
+  }
 }
 
-async function syncMicrophoneCaptures(): Promise<void> {
-  if (!mixerMicrophoneEnabled) {
-    stopAllMicrophoneCaptures()
-    applyMixerGains(streamGraph)
-    applyMixerGains(monitorGraph)
+function microphoneDeviceFor(plan: AudioRoutePlan): string | null {
+  return plan.microphoneDeviceId ?? (plan.mode === 'legacy' ? followedMicrophoneId : null)
+}
+
+async function openPlannedMicrophone(plan: AudioRoutePlan): Promise<void> {
+  const graphs = graphsToCreate(plan)
+  const context = graphs.voice ? streamContext : monitorContext
+  if (!context) throw new Error('The microphone graph is not ready.')
+  const deviceId = microphoneDeviceFor(plan)
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: microphoneTrackConstraints(deviceId, 'monitor'),
+    })
+  } catch (error) {
+    if (deviceId) throw new Error(microphoneUnavailableMessage())
+    throw error
+  }
+
+  const track = stream.getAudioTracks()[0]
+  const actualId = track?.getSettings().deviceId
+  if (!captureDeviceMatches(deviceId, actualId)) {
+    stream.getTracks().forEach((entry) => entry.stop())
+    throw new Error(openedWrongMicrophoneMessage(track?.label || 'a different microphone'))
+  }
+
+  streamMicCapture = {
+    stream,
+    source: context.createMediaStreamSource(stream),
+    tap: null,
+    tapSource: null,
+  }
+}
+
+function attachPlannedMicrophone(target: MicTarget): void {
+  const capture = streamMicCapture
+  const graph = target === 'voice' ? streamGraph : monitorGraph
+  const context = target === 'voice' ? streamContext : monitorContext
+  if (!capture || !graph || !context) {
+    throw new Error('The microphone graph is not ready.')
+  }
+  if (capture.source.context === context) {
+    capture.source.connect(graph.micEntry)
     return
   }
-
-  if (streamContext && streamGraph && !streamMicCapture) {
-    try {
-      const capture = await acquireMicrophoneCapture(streamContext)
-      capture.source.connect(streamGraph.voiceChain.input)
-      streamMicCapture = capture
-    } catch {
-      streamMicCapture = null
-    }
+  const owner = capture.source.context as AudioContext
+  const tap = capture.tap ?? owner.createMediaStreamDestination()
+  if (!capture.tap) {
+    capture.tap = tap
+    capture.source.connect(tap)
   }
+  capture.tapSource = context.createMediaStreamSource(tap.stream)
+  capture.tapSource.connect(graph.micEntry)
+}
 
-  if (shouldUseSeparateMonitor() && monitorContext && monitorGraph && !monitorMicCapture) {
-    try {
-      const capture = await acquireMicrophoneCapture(monitorContext)
-      capture.source.connect(monitorGraph.voiceChain.input)
-      monitorMicCapture = capture
-    } catch {
-      monitorMicCapture = null
-    }
-  } else if (!shouldUseSeparateMonitor()) {
-    monitorMicCapture = stopMicCapture(monitorMicCapture)
+async function createVoiceGraph(plan: AudioRoutePlan): Promise<void> {
+  await closeVoiceGraph()
+  streamContext = createRoutedContext(plan.voiceSinkId, plan.voiceSinkExplicit)
+  streamGraph = await createMixGraph(streamContext, plan.protectWithoutDucking)
+  applyMixerGains(streamGraph, 'voice')
+  logVoice('graph:stream-created', { sampleRate: streamContext.sampleRate })
+}
+
+async function createLocalGraph(plan: AudioRoutePlan): Promise<void> {
+  await closeLocalGraph()
+  monitorContext = createRoutedContext(plan.localSinkId, plan.localSinkExplicit)
+  monitorGraph = await createMixGraph(monitorContext, plan.protectWithoutDucking)
+  applyMixerGains(monitorGraph, 'local')
+  logVoice('graph:monitor-created', { sampleRate: monitorContext.sampleRate })
+}
+
+const routeHost: AudioRouteHost = {
+  async closeMicrophone() {
+    stopAllMicrophoneCaptures()
+  },
+  async closeVoice() {
+    await closeVoiceGraph()
+  },
+  async closeLocal() {
+    routeHost.detachMicrophone('local')
+    await closeLocalGraph()
+  },
+  async createVoice(plan) {
+    await createVoiceGraph(plan)
+  },
+  async createLocal(plan) {
+    await createLocalGraph(plan)
+  },
+  async setVoiceSink(plan) {
+    if (!streamContext) throw new Error('Voice-chat output is not ready.')
+    await applyExplicitSink(streamContext, plan.voiceSinkId, plan.voiceSinkExplicit)
+    streamDeviceId = plan.voiceSinkId
+  },
+  async setLocalSink(plan) {
+    if (!monitorContext) throw new Error('Headphone output is not ready.')
+    await applyExplicitSink(monitorContext, plan.localSinkId, plan.localSinkExplicit)
+  },
+  async resumeVoice() {
+    await resumeContext(streamContext)
+  },
+  async resumeLocal() {
+    await resumeContext(monitorContext)
+  },
+  async openMicrophone(plan) {
+    await openPlannedMicrophone(plan)
+  },
+  attachMicrophone(target) {
+    attachPlannedMicrophone(target)
+  },
+  detachMicrophone(target) {
+    if (target !== 'local' || !streamMicCapture) return
+    streamMicCapture.tapSource?.disconnect()
+    streamMicCapture.tapSource = null
+  },
+}
+
+function rememberPlanDevices(plan: AudioRoutePlan): void {
+  streamDeviceId = plan.voiceSinkId
+  activePlan = plan
+}
+
+let lastRouteRestored = false
+
+export function soundboardRouteRestored(): boolean {
+  return lastRouteRestored
+}
+
+export async function applySoundboardRoute(plan: AudioRoutePlan): Promise<string | null> {
+  const previous = lastGoodPlan
+  lastRouteRestored = false
+  const result = await applyAudioRoute(routeHost, plan, previous)
+  lastRouteRestored = !result.ok && result.restored
+  if (result.ok) {
+    rememberPlanDevices(plan)
+    lastGoodPlan = plan
+    applyMixerGains(streamGraph, 'voice')
+    applyMixerGains(monitorGraph, 'local')
+    return null
   }
+  if (result.restored && previous) {
+    rememberPlanDevices(previous)
+    lastGoodPlan = previous
+  } else {
+    activePlan = idlePlan
+    lastGoodPlan = null
+    streamDeviceId = null
+  }
+  return result.message
+}
 
-  applyMixerGains(streamGraph)
-  applyMixerGains(monitorGraph)
-  applyVoiceChainSettings(streamGraph?.voiceChain ?? null)
-  applyVoiceChainSettings(monitorGraph?.voiceChain ?? null)
+export async function setMicrophoneInputDevice(deviceId: string | null): Promise<string | null> {
+  const next = normalizeAudioInputDeviceId(deviceId)
+  if (configuredMicrophoneId === next) return null
+  configuredMicrophoneId = next
+  followedMicrophoneId = null
+  return null
+}
+
+export async function bindHearMyselfToDevice(deviceId: string): Promise<void> {
+  if (configuredMicrophoneId || !deviceId || !lastGoodPlan || lastGoodPlan.mode === 'gaming-discord') return
+  if (followedMicrophoneId === deviceId) return
+  const targets = playbackTargets(lastGoodPlan)
+  followedMicrophoneId = deviceId
+  if (!targets.voiceMicrophone && !targets.localMicrophone) return
+  await applySoundboardRoute({ ...lastGoodPlan, microphoneDeviceId: deviceId })
 }
 
 async function ensureStreamGraph(): Promise<{ context: AudioContext; soundboardGain: GainNode }> {
   if (!streamContext || !streamGraph) {
-    streamContext = new AudioContext()
-    await applySinkId(streamContext as SinkCapableAudioContext, streamDeviceId)
-    streamGraph = await createMixGraph(streamContext)
-    applyMixerGains(streamGraph)
-    await syncMicrophoneCaptures()
-    logVoice('graph:stream-created', { sampleRate: streamContext.sampleRate })
+    await createVoiceGraph(activePlan)
+    try {
+      if (!streamContext || !streamGraph) throw new Error('Voice-chat output is not ready.')
+      await applyExplicitSink(streamContext, activePlan.voiceSinkId, activePlan.voiceSinkExplicit)
+      streamDeviceId = activePlan.voiceSinkId
+    } catch (error) {
+      await closeVoiceGraph()
+      throw error
+    }
   }
-
-  if (streamContext.state === 'suspended') {
-    await streamContext.resume()
-  }
-
+  await resumeContext(streamContext)
+  if (!streamContext || !streamGraph) throw new Error('Voice-chat output is not ready.')
   return { context: streamContext, soundboardGain: streamGraph.soundboardGain }
 }
 
 async function ensureMonitorGraph(): Promise<{ context: AudioContext; soundboardGain: GainNode }> {
   if (!monitorContext || !monitorGraph) {
-    monitorContext = new AudioContext()
-    await applySinkId(monitorContext as SinkCapableAudioContext, monitorDeviceId)
-    monitorGraph = await createMixGraph(monitorContext)
-    applyMixerGains(monitorGraph)
-    await syncMicrophoneCaptures()
-    logVoice('graph:monitor-created', { sampleRate: monitorContext.sampleRate })
+    await createLocalGraph(activePlan)
+    try {
+      if (!monitorContext || !monitorGraph) throw new Error('Headphone output is not ready.')
+      await applyExplicitSink(monitorContext, activePlan.localSinkId, activePlan.localSinkExplicit)
+    } catch (error) {
+      await closeLocalGraph()
+      throw error
+    }
   }
-
-  if (monitorContext.state === 'suspended') {
-    await monitorContext.resume()
-  }
-
+  await resumeContext(monitorContext)
+  if (!monitorContext || !monitorGraph) throw new Error('Headphone output is not ready.')
   return { context: monitorContext, soundboardGain: monitorGraph.soundboardGain }
 }
 
@@ -696,32 +952,11 @@ export type SoundboardMixerSettings = {
   soundboardVolume: number
 }
 
-export async function setSoundboardRouting(options: {
-  streamDeviceId: string | null
-  monitorDeviceId: string | null
-  hearMyself: boolean
-}): Promise<void> {
-  streamDeviceId = options.streamDeviceId
-  monitorDeviceId = options.monitorDeviceId
-  hearMyselfEnabled = options.hearMyself
-  await resetAudioContexts()
-  await syncMicrophoneCaptures()
-}
-
 export async function setSoundboardMixerSettings(options: SoundboardMixerSettings): Promise<void> {
-  const micToggled = mixerMicrophoneEnabled !== options.microphoneEnabled
-  mixerMicrophoneEnabled = options.microphoneEnabled
   mixerMicrophoneVolume = options.microphoneVolume
   mixerSoundboardVolume = options.soundboardVolume
-
-  if (!mixerMicrophoneEnabled) {
-    stopAllMicrophoneCaptures()
-  } else if (micToggled || !streamMicCapture) {
-    await syncMicrophoneCaptures()
-  }
-
-  applyMixerGains(streamGraph)
-  applyMixerGains(monitorGraph)
+  applyMixerGains(streamGraph, 'voice')
+  applyMixerGains(monitorGraph, 'local')
 }
 
 export async function setVoiceEffectsSettings(options: VoiceEffectsSettings): Promise<void> {
@@ -743,10 +978,10 @@ export async function setVoiceEffectsSettings(options: VoiceEffectsSettings): Pr
     outputGain: voiceOutputGain,
   })
 
-  if (streamContext && streamGraph) {
+  if (streamContext && streamGraph?.voiceChain) {
     await attachPitchNode(streamContext, streamGraph.voiceChain)
   }
-  if (monitorContext && monitorGraph) {
+  if (monitorContext && monitorGraph?.voiceChain) {
     await attachPitchNode(monitorContext, monitorGraph.voiceChain)
   }
 
@@ -759,7 +994,11 @@ export function getSoundboardOutputDevice(): string | null {
 }
 
 export function isMixerMicrophoneActive(): boolean {
-  return mixerMicrophoneEnabled && streamMicCapture !== null
+  return activePlan.voiceMicrophone && streamMicCapture !== null
+}
+
+export function isVoiceGraphSuspended(): boolean {
+  return streamContext?.state === 'suspended'
 }
 
 export function isSinkIdSupported(): boolean {
@@ -768,6 +1007,64 @@ export function isSinkIdSupported(): boolean {
   const supported = typeof probe.setSinkId === 'function'
   void probe.close()
   return supported
+}
+
+function meterPeak(meter: AnalyserNode | null | undefined): number {
+  if (!meter) return 0
+  const samples = new Float32Array(meter.fftSize)
+  meter.getFloatTimeDomainData(samples)
+  let peak = 0
+  for (let index = 0; index < samples.length; index += 1) {
+    peak = Math.max(peak, Math.abs(samples[index] ?? 0))
+  }
+  return peak
+}
+
+let recentSoundboardPeak = 0
+let recentSoundboardAt = 0
+
+function rememberSoundboardPeak(peak: number): void {
+  if (peak <= 0) return
+  if (peak < recentSoundboardPeak && Date.now() - recentSoundboardAt < 5000) return
+  recentSoundboardPeak = peak
+  recentSoundboardAt = Date.now()
+}
+
+function watchSoundboardMeter(): void {
+  for (const delay of [40, 120, 220]) {
+    window.setTimeout(() => {
+      rememberSoundboardPeak(meterPeak(streamGraph?.soundboardMeter))
+    }, delay)
+  }
+}
+
+function contextSinkId(context: AudioContext | null): string | null {
+  if (!context) return null
+  const sinkId = (context as AudioContext & { sinkId?: string }).sinkId
+  return typeof sinkId === 'string' ? sinkId : null
+}
+
+export function getVoiceMixSnapshot(): {
+  microphonePeak: number
+  soundboardPeak: number
+  soundboardTested: boolean
+  sinkId: string | null
+  sinkMatchesRequest: boolean | null
+  contextState: string | null
+} {
+  const liveBoard = meterPeak(streamGraph?.soundboardMeter)
+  if (liveBoard > 0) rememberSoundboardPeak(liveBoard)
+  const fresh = Date.now() - recentSoundboardAt < 5000
+  const sinkId = contextSinkId(streamContext)
+  const requested = activePlan.voiceSinkExplicit ? activePlan.voiceSinkId : null
+  return {
+    microphonePeak: meterPeak(streamGraph?.microphoneMeter),
+    soundboardPeak: fresh ? Math.max(liveBoard, recentSoundboardPeak) : liveBoard,
+    soundboardTested: fresh,
+    sinkId,
+    sinkMatchesRequest: requested ? (sinkId === null ? null : sinkId === requested) : null,
+    contextState: streamContext?.state ?? null,
+  }
 }
 
 export async function playOutputTestTone(): Promise<boolean> {
@@ -782,6 +1079,7 @@ export async function playOutputTestTone(): Promise<boolean> {
 
     oscillator.connect(gain)
     gain.connect(soundboardGain)
+    watchSoundboardMeter()
 
     const startAt = context.currentTime
     oscillator.start(startAt)
@@ -802,7 +1100,27 @@ export async function preloadClipAudio(clipId: string): Promise<void> {
   const { context } = await ensureStreamGraph()
   const arrayBuffer = await blob.arrayBuffer()
   const audioBuffer = await context.decodeAudioData(arrayBuffer.slice(0))
+  bufferOrigin.set(audioBuffer, context)
   bufferCache.set(clipId, audioBuffer)
+}
+
+function bufferForContext(context: AudioContext, clipId: string, shared: AudioBuffer): AudioBuffer {
+  const version = clipAudioVersion.get(clipId) ?? 0
+  if (bufferOrigin.get(shared) === context) return shared
+  let copies = buffersByContext.get(context)
+  if (!copies) {
+    copies = new Map()
+    buffersByContext.set(context, copies)
+  }
+  const cached = copies.get(clipId)
+  if (cached && cached.version === version && bufferOrigin.get(cached.buffer) === context) return cached.buffer
+  const copy = context.createBuffer(shared.numberOfChannels, shared.length, shared.sampleRate)
+  for (let channel = 0; channel < shared.numberOfChannels; channel += 1) {
+    copy.copyToChannel(shared.getChannelData(channel).slice(), channel)
+  }
+  bufferOrigin.set(copy, context)
+  copies.set(clipId, { buffer: copy, version })
+  return copy
 }
 
 export async function preloadClipAudioMany(clipIds: string[]): Promise<void> {
@@ -811,6 +1129,7 @@ export async function preloadClipAudioMany(clipIds: string[]): Promise<void> {
 
 export function invalidateClipAudio(clipId: string): void {
   bufferCache.delete(clipId)
+  clipAudioVersion.set(clipId, (clipAudioVersion.get(clipId) ?? 0) + 1)
 }
 
 function startSource(
@@ -858,17 +1177,26 @@ export async function playClipInstant(
       }
     }
 
-    const { context, soundboardGain } = await ensureStreamGraph()
-    const streamPlay = startSource(context, buffer, soundboardGain, finishIfDone)
-    streamPlay.gain.gain.value = volumeGain
-    sources.push(streamPlay.source)
-    gainNodes.push(streamPlay.gain)
+    const targets = playbackTargets(activePlan)
+    if (targets.voicePads) {
+      const { context, soundboardGain } = await ensureStreamGraph()
+      const streamPlay = startSource(
+        context,
+        bufferForContext(context, clipId, buffer),
+        soundboardGain,
+        finishIfDone,
+      )
+      streamPlay.gain.gain.value = volumeGain
+      sources.push(streamPlay.source)
+      gainNodes.push(streamPlay.gain)
+      watchSoundboardMeter()
+    }
 
-    if (shouldUseSeparateMonitor()) {
+    if (targets.localPads) {
       const monitor = await ensureMonitorGraph()
       const monitorPlay = startSource(
         monitor.context,
-        buffer,
+        bufferForContext(monitor.context, clipId, buffer),
         monitor.soundboardGain,
         finishIfDone,
       )
@@ -876,6 +1204,8 @@ export async function playClipInstant(
       sources.push(monitorPlay.source)
       gainNodes.push(monitorPlay.gain)
     }
+
+    if (sources.length === 0) return false
 
     activePlaybacks.set(playbackId, {
       id: playbackId,
@@ -959,8 +1289,7 @@ export function stopAllInstantPlayback(): void {
 }
 
 export function warmUpAudioEngine(): void {
-  void ensureStreamGraph()
-  if (shouldUseSeparateMonitor()) {
-    void ensureMonitorGraph()
-  }
+  const graphs = graphsToCreate(activePlan)
+  if (graphs.voice) void ensureStreamGraph()
+  if (graphs.local) void ensureMonitorGraph()
 }

@@ -5,9 +5,10 @@ import { startProCheckout } from '../lib/checkout'
 
 type ProCheckoutButtonProps = {
   className?: string
+  label?: string
 }
 
-export function ProCheckoutButton({ className = '' }: ProCheckoutButtonProps) {
+export function ProCheckoutButton({ className = '', label }: ProCheckoutButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,7 +39,7 @@ export function ProCheckoutButton({ className = '' }: ProCheckoutButtonProps) {
       >
         {isLoading
           ? 'Opening secure checkout…'
-          : `Buy Pro — ${SITE.pricing.proPriceLabel}${SITE.pricing.proPriceInterval}`}
+          : label ?? `Buy Pro — ${SITE.pricing.proPriceLabel}${SITE.pricing.proPriceInterval}`}
       </Button>
 
       {error ? (

@@ -22,6 +22,10 @@ function generateLicenseKey(prefix = 'PRO1', middle = 'FULL') {
   return `SLIP-${part1}-${part2}-${checksum}`
 }
 
-console.log('Demo Pro license keys:')
+console.log('Development demo keys (not customer licenses):')
 console.log(generateLicenseKey('PRO1', 'FULL'))
 console.log(generateLicenseKey('DEMO', 'TEST'))
+console.log('')
+console.log('These keys are not in the license database.')
+console.log('In an unpackaged development app they simulate Pro and show as Dev Pro.')
+console.log('Installed builds reject them. Settings → Development Pro is the easier switch.')

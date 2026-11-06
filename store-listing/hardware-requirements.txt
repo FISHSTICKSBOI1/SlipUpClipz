@@ -1,0 +1,14 @@
+SlipUpClipz soundboard
+- Windows 10 or Windows 11, 64-bit
+- A microphone for recording
+- Headphones are recommended when monitoring your own voice
+- Optional: VB-Audio Virtual Cable for routing playback to another program
+
+AI Voice Clip Cloning, in addition to the soundboard
+- A supported NVIDIA GPU and a current NVIDIA driver
+- About 15 GB of free disk space for the optional component
+- The CUDA development toolkit is not required
+- Other graphics cards are not claimed as supported
+- English speech
+
+The Microsoft Store package identity stays SlipUpClipzLLC.SlipUpClipz, publisher CN=3B960933-E78C-4110-B2BE-9718E5AB5729, package family SlipUpClipzLLC.SlipUpClipz_z6z50n1zy6nqj. The Store package version for this release is 1.0.6.0. The public version is 0.1.6.

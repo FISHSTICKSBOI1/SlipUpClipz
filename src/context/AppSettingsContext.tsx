@@ -7,13 +7,21 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { buildAudioRoutePlan } from '@shared/gamingAudioRouting'
 import {
+  listAudioInputDevices,
   listAudioOutputDevices,
   subscribeToAudioDeviceChanges,
   validateOutputRouting,
 } from '../lib/audioDevices'
 import { loadAppSettings, saveAppSettings } from '../lib/electronBridge'
-import { setSoundboardMixerSettings, setSoundboardRouting, setVoiceEffectsSettings } from '../lib/soundboardAudio'
+import {
+  applySoundboardRoute,
+  setMicrophoneInputDevice,
+  setSoundboardMixerSettings,
+  setVoiceEffectsSettings,
+  soundboardRouteRestored,
+} from '../lib/soundboardAudio'
 import type { AppSettings } from '@shared/appTypes'
 import { DEFAULT_SETTINGS } from '@shared/appTypes'
 
@@ -27,45 +35,44 @@ type AppSettingsContextValue = {
 
 const AppSettingsContext = createContext<AppSettingsContextValue | null>(null)
 
-function routingKey(settings: AppSettings): string {
-  return [
-    settings.audioOutputDeviceId,
-    settings.routeToVBCable,
-    settings.hearMyself,
-  ].join('|')
-}
-
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [isLoading, setIsLoading] = useState(true)
   const [outputRoutingNotice, setOutputRoutingNotice] = useState<string | null>(null)
   const settingsRef = useRef(settings)
-  const lastRoutingKeyRef = useRef<string | null>(null)
+  const lastPlanKeyRef = useRef<string | null>(null)
 
   settingsRef.current = settings
 
-  const applySoundboardAudio = useCallback(async (nextSettings: AppSettings) => {
-    const devices = await listAudioOutputDevices()
-    const validation = validateOutputRouting(devices, nextSettings)
-    const nextRoutingKey = routingKey(nextSettings)
+  const applySoundboardAudio = useCallback(async (nextSettings: AppSettings): Promise<string | null> => {
+    await setMicrophoneInputDevice(nextSettings.audioInputDeviceId)
 
-    if (lastRoutingKeyRef.current !== nextRoutingKey) {
-      await setSoundboardRouting({
-        streamDeviceId: validation.streamDeviceId,
-        monitorDeviceId: nextSettings.audioOutputDeviceId,
-        hearMyself: nextSettings.hearMyself,
-      })
-      lastRoutingKeyRef.current = nextRoutingKey
+    const [devices, inputs] = await Promise.all([listAudioOutputDevices(), listAudioInputDevices()])
+    const validation = validateOutputRouting(devices, nextSettings)
+    if (validation.missingVBCable && nextSettings.routeToVBCable && !nextSettings.gamingDiscordPreset) {
+      setOutputRoutingNotice(
+        'VB-Audio Virtual Cable is no longer available. Soundboard output is using your selected fallback device.',
+      )
     }
 
+    const built = buildAudioRoutePlan(nextSettings, devices, inputs)
+    const planKey = JSON.stringify(built.plan)
+    let routeError: string | null = null
+    if (lastPlanKeyRef.current !== planKey) {
+      routeError = await applySoundboardRoute(built.plan)
+      if (!routeError) lastPlanKeyRef.current = planKey
+    }
+    if (built.notice) setOutputRoutingNotice(built.notice)
+    if (routeError) setOutputRoutingNotice(routeError)
+
     await setSoundboardMixerSettings({
-      microphoneEnabled: nextSettings.mixerMicrophoneEnabled,
+      microphoneEnabled: nextSettings.gamingDiscordPreset ? true : nextSettings.mixerMicrophoneEnabled,
       microphoneVolume: nextSettings.mixerMicrophoneVolume,
       soundboardVolume: nextSettings.mixerSoundboardVolume,
     })
 
     await setVoiceEffectsSettings({
-      enabled: nextSettings.voiceEffectsEnabled,
+      enabled: nextSettings.gamingDiscordPreset ? false : nextSettings.voiceEffectsEnabled,
       pitch: nextSettings.voicePitch,
       bass: nextSettings.voiceBass,
       formant: nextSettings.voiceFormant,
@@ -73,6 +80,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
       outputGain: nextSettings.voiceOutputGain,
       preset: nextSettings.voicePreset,
     })
+    return routeError
   }, [])
 
   const repairOutputRouting = useCallback(
@@ -115,7 +123,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
       const repaired = await repairOutputRouting(loaded, false)
       setSettings(repaired)
       setIsLoading(false)
-      lastRoutingKeyRef.current = null
+      lastPlanKeyRef.current = null
       await applySoundboardAudio(repaired)
     })()
   }, [applySoundboardAudio, repairOutputRouting])
@@ -127,17 +135,29 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
       void (async () => {
         const repaired = await repairOutputRouting(settingsRef.current, true)
         setSettings(repaired)
-        lastRoutingKeyRef.current = null
+        lastPlanKeyRef.current = null
         await applySoundboardAudio(repaired)
       })()
     })
   }, [applySoundboardAudio, isLoading, repairOutputRouting])
 
   async function updateSettings(partial: Partial<AppSettings>) {
+    const previous = settingsRef.current
     clearOutputRoutingNotice()
     const next = await saveAppSettings(partial)
     setSettings(next)
-    await applySoundboardAudio(next)
+    const error = await applySoundboardAudio(next)
+    if (!error) return
+
+    const undo: Partial<AppSettings> = {}
+    for (const key of Object.keys(partial) as Array<keyof AppSettings>) {
+      undo[key] = previous[key] as never
+    }
+    const restored = await saveAppSettings(undo)
+    setSettings(restored)
+    if (!soundboardRouteRestored()) lastPlanKeyRef.current = null
+    await applySoundboardAudio(restored)
+    setOutputRoutingNotice(error)
   }
 
   function clearOutputRoutingNotice() {

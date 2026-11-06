@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { trimAudioBuffer } from '../lib/audioTrim'
+import {
+  audioBufferFromPcm,
+  beginEditSession,
+  commitRemoval,
+  pcmFromAudioBuffer,
+  resetEdit,
+  trimAudioBuffer,
+  undoEdit,
+  viewAfterRemoval,
+  type EditSession,
+} from '../lib/audioTrim'
+import { playbackStartSec } from '../lib/trimPlayback'
 import { formatDecodeException } from '../lib/clipDebug'
 import { logClipPipeline, logClipPipelineError, summarizeBlob } from '../lib/clipPipelineLog'
 import { computeWaveformPeaks, decodeAudioBlob, peaksToDurationMs } from '../lib/waveform'
@@ -16,6 +27,9 @@ export function useAudioTrimEditor(blob: Blob | null) {
   const [endSec, setEndSec] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [removalCount, setRemovalCount] = useState(0)
+  const sessionRef = useRef<EditSession | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [playheadSec, setPlayheadSec] = useState(0)
@@ -31,9 +45,17 @@ export function useAudioTrimEditor(blob: Blob | null) {
   })
   const startSecRef = useRef(0)
   const endSecRef = useRef(0)
+  const playheadSecRef = useRef(0)
+  const playbackTokenRef = useRef(0)
+  const isPreviewingRef = useRef(false)
 
   startSecRef.current = startSec
   endSecRef.current = endSec
+
+  const rememberPlayhead = useCallback((sec: number) => {
+    playheadSecRef.current = sec
+    setPlayheadSec(sec)
+  }, [])
 
   const clearPreviewTimers = useCallback(() => {
     if (previewEndTimerRef.current !== null) {
@@ -61,9 +83,12 @@ export function useAudioTrimEditor(blob: Blob | null) {
   }, [clearPreviewTimers])
 
   const stopPreview = useCallback(() => {
+    playbackTokenRef.current += 1
     stopSourceOnly()
+    isPreviewingRef.current = false
     setIsPreviewing(false)
     setIsPaused(false)
+    playheadSecRef.current = startSecRef.current
     setPlayheadSec(startSecRef.current)
   }, [stopSourceOnly])
 
@@ -74,6 +99,7 @@ export function useAudioTrimEditor(blob: Blob | null) {
     const { contextStart, bufferOffset, selectionEnd } = previewAnchorRef.current
     const elapsed = context.currentTime - contextStart
     const next = Math.min(selectionEnd, bufferOffset + elapsed)
+    playheadSecRef.current = next
     setPlayheadSec(next)
 
     if (next >= selectionEnd - 0.001) {
@@ -91,7 +117,9 @@ export function useAudioTrimEditor(blob: Blob | null) {
       const selectionEnd = endSecRef.current
       if (selectionEnd <= selectionStart) return
 
-      const clamped = Math.max(selectionStart, Math.min(fromSec, selectionEnd - 0.01))
+      const token = ++playbackTokenRef.current
+      isPreviewingRef.current = true
+      const clamped = playbackStartSec(fromSec, selectionStart, Math.max(selectionStart, selectionEnd - 0.01))
       const remaining = selectionEnd - clamped
       if (remaining <= 0.01) {
         stopPreview()
@@ -99,6 +127,7 @@ export function useAudioTrimEditor(blob: Blob | null) {
       }
 
       stopSourceOnly()
+      if (token !== playbackTokenRef.current) return
 
       if (!audioContextRef.current) {
         audioContextRef.current = new AudioContext()
@@ -116,11 +145,17 @@ export function useAudioTrimEditor(blob: Blob | null) {
         if (previewSourceRef.current !== source) return
         previewSourceRef.current = null
         clearPreviewTimers()
+        isPreviewingRef.current = false
         setIsPreviewing(false)
         setIsPaused(false)
+        playheadSecRef.current = startSecRef.current
         setPlayheadSec(startSecRef.current)
       }
 
+      if (token !== playbackTokenRef.current) {
+        source.disconnect()
+        return
+      }
       previewSourceRef.current = source
       previewAnchorRef.current = {
         contextStart: context.currentTime,
@@ -128,7 +163,8 @@ export function useAudioTrimEditor(blob: Blob | null) {
         selectionEnd,
       }
 
-      setPlayheadSec(clamped)
+      rememberPlayhead(clamped)
+      isPreviewingRef.current = true
       setIsPreviewing(true)
       setIsPaused(false)
       source.start(0, clamped, remaining)
@@ -139,41 +175,50 @@ export function useAudioTrimEditor(blob: Blob | null) {
 
       rafRef.current = window.requestAnimationFrame(tickPlayhead)
     },
-    [audioBuffer, clearPreviewTimers, stopPreview, stopSourceOnly, tickPlayhead],
+    [audioBuffer, clearPreviewTimers, rememberPlayhead, stopPreview, stopSourceOnly, tickPlayhead],
   )
 
   const pausePreview = useCallback(() => {
-    if (!isPreviewing || isPaused) return
+    playbackTokenRef.current += 1
     const context = audioContextRef.current
-    if (context) {
+    if (previewSourceRef.current && context) {
       const { contextStart, bufferOffset, selectionEnd } = previewAnchorRef.current
       const frozen = Math.min(
         selectionEnd,
         bufferOffset + (context.currentTime - contextStart),
       )
-      setPlayheadSec(frozen)
+      rememberPlayhead(frozen)
     }
     stopSourceOnly()
+    isPreviewingRef.current = false
     setIsPreviewing(false)
     setIsPaused(true)
-  }, [isPaused, isPreviewing, stopSourceOnly])
+  }, [rememberPlayhead, stopSourceOnly])
 
   const resumePreview = useCallback(() => {
-    void startPlaybackFrom(playheadSec)
-  }, [playheadSec, startPlaybackFrom])
+    void startPlaybackFrom(playheadSecRef.current)
+  }, [startPlaybackFrom])
 
   const previewSelection = useCallback(async () => {
-    await startPlaybackFrom(startSecRef.current)
+    await startPlaybackFrom(playheadSecRef.current)
   }, [startPlaybackFrom])
+
+  const togglePreview = useCallback(() => {
+    if (isPreviewingRef.current) {
+      pausePreview()
+      return
+    }
+    void startPlaybackFrom(playheadSecRef.current)
+  }, [pausePreview, startPlaybackFrom])
 
   const seekPreview = useCallback(
     (sec: number) => {
       const selectionStart = startSecRef.current
       const selectionEnd = endSecRef.current
       const clamped = Math.max(selectionStart, Math.min(sec, selectionEnd))
-      setPlayheadSec(clamped)
+      rememberPlayhead(clamped)
 
-      if (isPreviewing && !isPaused) {
+      if (isPreviewingRef.current) {
         void startPlaybackFrom(clamped)
         return
       }
@@ -182,7 +227,7 @@ export function useAudioTrimEditor(blob: Blob | null) {
         setIsPaused(true)
       }
     },
-    [isPaused, isPreviewing, startPlaybackFrom],
+    [isPaused, rememberPlayhead, startPlaybackFrom],
   )
 
   useEffect(() => {
@@ -192,6 +237,7 @@ export function useAudioTrimEditor(blob: Blob | null) {
       setDurationSec(0)
       setStartSec(0)
       setEndSec(0)
+      playheadSecRef.current = 0
       setPlayheadSec(0)
       setError(null)
       return
@@ -208,12 +254,15 @@ export function useAudioTrimEditor(blob: Blob | null) {
         if (cancelled) return
 
         const duration = buffer.duration
+        sessionRef.current = beginEditSession(pcmFromAudioBuffer(buffer))
+        setRemovalCount(0)
+        setNotice(null)
         setAudioBuffer(buffer)
         setPeaks(computeWaveformPeaks(buffer, WAVEFORM_BARS))
         setDurationSec(duration)
         setStartSec(0)
         setEndSec(duration)
-        setPlayheadSec(0)
+        rememberPlayhead(0)
 
         logClipPipeline('trimEditor:ready', {
           durationSec: duration,
@@ -248,9 +297,6 @@ export function useAudioTrimEditor(blob: Blob | null) {
     }
   }, [stopPreview])
 
-  const isPreviewingRef = useRef(false)
-  isPreviewingRef.current = isPreviewing
-
   // When the trim region changes, stop an active preview and keep the playhead in range.
   // Do NOT depend on isPreviewing/isPaused — that previously stopped playback the instant it started.
   useEffect(() => {
@@ -260,10 +306,9 @@ export function useAudioTrimEditor(blob: Blob | null) {
     }
 
     setPlayheadSec((current) => {
-      if (current < startSec || current > endSec) {
-        return startSec
-      }
-      return current
+      const next = current < startSec || current > endSec ? startSec : current
+      playheadSecRef.current = next
+      return next
     })
   }, [endSec, startSec, stopPreview])
 
@@ -346,6 +391,68 @@ export function useAudioTrimEditor(blob: Blob | null) {
     [clampSelection],
   )
 
+  const showBuffer = useCallback(
+    (buffer: AudioBuffer) => {
+      stopPreview()
+      const view = viewAfterRemoval(buffer.duration)
+      setAudioBuffer(buffer)
+      setPeaks(computeWaveformPeaks(buffer, WAVEFORM_BARS))
+      setDurationSec(view.endSec)
+      setStartSec(view.startSec)
+      rememberPlayhead(view.playheadSec)
+      setEndSec(view.endSec)
+    },
+    [rememberPlayhead, stopPreview],
+  )
+
+  const removeSelection = useCallback(
+    (isPro: boolean, range: { startSec: number; endSec: number } | null) => {
+      const session = sessionRef.current
+      if (!session) return false
+      if (!isPro) {
+        setNotice('Cut is a Pro feature.')
+        return false
+      }
+      if (!range) {
+        setNotice('Press C at the cut cursor to mark both sides. That selection cannot be empty or the whole clip.')
+        return false
+      }
+      const removed = commitRemoval(session, range.startSec, range.endSec, true)
+      if (removed.error || removed.session === session) {
+        setNotice(removed.error ?? 'Choose a region inside the clip to remove.')
+        return false
+      }
+      sessionRef.current = removed.session
+      setRemovalCount(removed.session.undo.length)
+      setNotice('The cut is ready to preview. Saving keeps the original clip and adds a new one.')
+      showBuffer(audioBufferFromPcm(removed.session.current))
+      return true
+    },
+    [showBuffer],
+  )
+
+  const undoRemoval = useCallback(() => {
+    const session = sessionRef.current
+    if (!session || session.undo.length === 0) return false
+    const next = undoEdit(session)
+    sessionRef.current = next
+    setRemovalCount(next.undo.length)
+    setNotice(null)
+    showBuffer(audioBufferFromPcm(next.current))
+    return true
+  }, [showBuffer])
+
+  const resetEdits = useCallback(() => {
+    const session = sessionRef.current
+    if (!session) return false
+    const next = resetEdit(session)
+    sessionRef.current = next
+    setRemovalCount(0)
+    setNotice(null)
+    showBuffer(audioBufferFromPcm(next.current))
+    return true
+  }, [showBuffer])
+
   const buildTrimmedRecording = useCallback((): RecordingResult | null => {
     if (!audioBuffer) return null
     return trimAudioBuffer(audioBuffer, startSec, endSec)
@@ -371,9 +478,15 @@ export function useAudioTrimEditor(blob: Blob | null) {
     previewSelection,
     pausePreview,
     resumePreview,
+    togglePreview,
     stopPreview,
     seekPreview,
     buildTrimmedRecording,
+    removeSelection,
+    undoRemoval,
+    resetEdits,
+    hasRemovals: removalCount > 0,
+    notice,
     selectionDurationMs,
     totalDurationMs,
   }

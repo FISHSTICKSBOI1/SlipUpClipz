@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RecordingResult } from '../types/clip'
-import { inspectAudioContainer } from '../lib/clipDebug'
+import { bindHearMyselfToDevice } from '../lib/soundboardAudio'
 import {
-  analyzeBlobSamples,
-  getMicTrackDiagnostics,
-  logMicSilenceAnalysis,
-  logMicTrackDiagnostics,
-  micPeakToPercent,
-  playBlobAudio,
-  readMicPeakLevel,
-  sampleAnalyserPeak,
-  startMicMonitor,
-  type MicMonitorHandle,
-  type MicSampleAnalysis,
-} from '../lib/microphoneMonitor'
+  appendPcmBlock,
+  bufferedMilliseconds,
+  canCaptureClip,
+  classifyMicTest,
+  copyRecentFrames,
+  createPcmRing,
+  encodePcmWav,
+  MIC_TEST_SECONDS,
+  micTestPlaybackBudget,
+  peakOfSamples,
+  replayWindowSeconds,
+  shouldRestartCapture,
+  validateWavRecording,
+  type PcmRing,
+} from '@shared/replayCapture'
+import { playBlobAudio } from '../lib/microphoneMonitor'
 import {
   acquireMicrophoneStream,
   acquireReplayCaptureStream,
@@ -22,57 +25,27 @@ import {
   releaseSystemAudioCapture,
   type ReplayCaptureConfig,
 } from '../lib/replayAudioCapture'
-import {
-  logClipPipeline,
-  logClipPipelineError,
-  summarizeBlob,
-} from '../lib/clipPipelineLog'
+import { logClipPipeline, logClipPipelineError } from '../lib/clipPipelineLog'
+import type { RecordingResult } from '../types/clip'
 
 export type { ReplayCaptureConfig }
-
-/** Temporary: bypass replay buffer and record 5s directly to isolate decode failures. */
-export const BYPASS_REPLAY_BUFFER_FOR_DEBUG = false
-export const DIRECT_RECORD_TEST_SECONDS = 5
-export const MIC_TEST_SECONDS = 5
-
-const CHUNK_TIMESLICE_MS = 250
+export { MIC_TEST_SECONDS }
 
 export const MIN_BUFFER_SECONDS = 0
 export const MAX_BUFFER_SECONDS = 30
 export const DEFAULT_BUFFER_SECONDS = 15
 
-type MediaChunk = {
-  blob: Blob
-  startMs: number
+function wavBlob(wav: Uint8Array): Blob {
+  const copy = new ArrayBuffer(wav.byteLength)
+  new Uint8Array(copy).set(wav)
+  return new Blob([copy], { type: 'audio/wav' })
 }
 
-function pickMimeType(): string {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/ogg;codecs=opus',
-    'audio/mp4',
-  ]
-  const selected =
-    candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? 'audio/webm'
-
-  logClipPipeline('buffer:mimeTypeSelected', {
-    mimeType: selected,
-    supported: candidates.filter((type) => MediaRecorder.isTypeSupported(type)),
-  })
-
-  return selected
-}
-
-function blobBaseMimeType(mimeType: string): string {
-  return mimeType.split(';')[0]?.trim() || mimeType
-}
-
-function validateLiveAudioTrack(stream: MediaStream): MediaStreamTrack | null {
-  const track = stream.getAudioTracks()[0]
-  if (!track) return null
-  if (track.readyState !== 'live' || !track.enabled) return null
-  return track
+type CaptureGraph = {
+  context: AudioContext
+  source: MediaStreamAudioSourceNode
+  processor: ScriptProcessorNode
+  mute: GainNode
 }
 
 export function useReplayBuffer(captureConfig: ReplayCaptureConfig) {
@@ -81,833 +54,404 @@ export function useReplayBuffer(captureConfig: ReplayCaptureConfig) {
   const [isListening, setIsListening] = useState(false)
   const [isRequestingMic, setIsRequestingMic] = useState(true)
   const [microphoneLabel, setMicrophoneLabel] = useState<string | null>(null)
+  const [microphoneNotice, setMicrophoneNotice] = useState<string | null>(null)
   const [micLevelPercent, setMicLevelPercent] = useState(0)
   const [isTestingMic, setIsTestingMic] = useState(false)
+  const [micTestSecondsLeft, setMicTestSecondsLeft] = useState(MIC_TEST_SECONDS)
   const [micTestMessage, setMicTestMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const initChunkRef = useRef<Blob | null>(null)
-  const mediaChunksRef = useRef<MediaChunk[]>([])
   const bufferLengthSecRef = useRef(bufferLengthSec)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const mimeTypeRef = useRef('audio/webm')
-  const pruneTimerRef = useRef<number | null>(null)
-  const isFirstChunkRef = useRef(true)
-  const totalChunkCountRef = useRef(0)
-  const totalBytesRecordedRef = useRef(0)
-  const micPermissionRef = useRef<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
-  const micMonitorRef = useRef<MicMonitorHandle | null>(null)
-  const micLevelRafRef = useRef<number | null>(null)
-  const restartTimerRef = useRef<number | null>(null)
+  const graphRef = useRef<CaptureGraph | null>(null)
+  const ringRef = useRef<PcmRing | null>(null)
+  const isTestingRef = useRef(false)
+  const capturingRef = useRef(false)
+  const mountedRef = useRef(true)
   const isStartingRef = useRef(false)
-  const scheduleAutoRestartRef = useRef<(reason: string) => void>(() => {})
-  const startListeningRef = useRef<() => Promise<boolean>>(async () => false)
+  const startTokenRef = useRef(0)
+  const restartTimerRef = useRef<number | null>(null)
+  const levelTimerRef = useRef<number | null>(null)
+  const actualDeviceIdRef = useRef<string | null>(null)
   const captureConfigRef = useRef(captureConfig)
   const usingSystemLoopbackRef = useRef(false)
+  const scheduleAutoRestartRef = useRef<(reason: string) => void>(() => {})
+  const startListeningRef = useRef<() => Promise<boolean>>(async () => false)
+  const teardownRef = useRef<() => void>(() => {})
 
   captureConfigRef.current = captureConfig
-
   bufferLengthSecRef.current = bufferLengthSec
+
+  const stopGraph = useCallback(() => {
+    const graph = graphRef.current
+    graphRef.current = null
+    capturingRef.current = false
+    if (!graph) return
+    graph.processor.onaudioprocess = null
+    try { graph.source.disconnect() } catch { /* already disconnected */ }
+    try { graph.processor.disconnect() } catch { /* already disconnected */ }
+    try { graph.mute.disconnect() } catch { /* already disconnected */ }
+    void graph.context.close()
+  }, [])
 
   const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
   }, [])
 
-  const clearPruneTimer = useCallback(() => {
-    if (pruneTimerRef.current !== null) {
-      window.clearInterval(pruneTimerRef.current)
-      pruneTimerRef.current = null
+  const stopLevelTimer = useCallback(() => {
+    if (levelTimerRef.current !== null) {
+      window.clearInterval(levelTimerRef.current)
+      levelTimerRef.current = null
     }
-  }, [])
-
-  const stopMicMonitor = useCallback(() => {
-    if (micLevelRafRef.current !== null) {
-      cancelAnimationFrame(micLevelRafRef.current)
-      micLevelRafRef.current = null
-    }
-
-    micMonitorRef.current?.stop()
-    micMonitorRef.current = null
-    setMicLevelPercent(0)
-  }, [])
-
-  const beginMicMonitor = useCallback((stream: MediaStream) => {
-    stopMicMonitor()
-
-    void startMicMonitor(stream).then((monitor) => {
-      if (streamRef.current !== stream) {
-        monitor.stop()
-        return
-      }
-
-      micMonitorRef.current = monitor
-
-      const tick = () => {
-        if (!micMonitorRef.current) return
-        const peak = readMicPeakLevel(monitor.analyser)
-        setMicLevelPercent(micPeakToPercent(peak))
-        micLevelRafRef.current = requestAnimationFrame(tick)
-      }
-
-      micLevelRafRef.current = requestAnimationFrame(tick)
-    })
-  }, [stopMicMonitor])
-
-  const updateBufferedMs = useCallback(() => {
-    const mediaChunks = mediaChunksRef.current
-    const windowMs = bufferLengthSecRef.current * 1000
-
-    if (mediaChunks.length === 0 && !initChunkRef.current) {
-      setBufferedMs(0)
-      return
-    }
-
-    if (windowMs <= 0) {
-      setBufferedMs(initChunkRef.current ? CHUNK_TIMESLICE_MS : 0)
-      return
-    }
-
-    if (mediaChunks.length === 0) {
-      setBufferedMs(Math.min(CHUNK_TIMESLICE_MS, windowMs))
-      return
-    }
-
-    const oldest = mediaChunks[0].startMs
-    const span = Date.now() - oldest + CHUNK_TIMESLICE_MS
-    setBufferedMs(Math.min(span, windowMs))
-  }, [])
-
-  const pruneOldMediaChunks = useCallback(() => {
-    const windowMs = bufferLengthSecRef.current * 1000
-
-    if (windowMs <= 0) {
-      if (mediaChunksRef.current.length > 1) {
-        mediaChunksRef.current = mediaChunksRef.current.slice(-1)
-      }
-    } else {
-      const cutoff = Date.now() - windowMs
-      mediaChunksRef.current = mediaChunksRef.current.filter(
-        (chunk) => chunk.startMs >= cutoff,
-      )
-    }
-
-    updateBufferedMs()
-  }, [updateBufferedMs])
-
-  const buildClipBlobFromParts = useCallback(
-    (parts: Blob[], mimeType: string): Blob | null => {
-      const nonEmpty = parts.filter((part) => part.size > 0)
-      if (nonEmpty.length === 0) return null
-      return new Blob(nonEmpty, { type: blobBaseMimeType(mimeType) })
-    },
-    [],
-  )
-
-  const logCaptureStats = useCallback((stage: string, extra: Record<string, unknown> = {}) => {
-    logClipPipeline(stage, {
-      micPermissionGranted:
-        micPermissionRef.current === 'granted' || micPermissionRef.current === 'prompt',
-      micPermission: micPermissionRef.current,
-      mediaRecorderStarted: mediaRecorderRef.current?.state === 'recording',
-      mediaRecorderState: mediaRecorderRef.current?.state ?? 'none',
-      totalChunksRecorded: totalChunkCountRef.current,
-      totalBytesRecorded: totalBytesRecordedRef.current,
-      initChunkBytes: initChunkRef.current?.size ?? 0,
-      mediaChunkCount: mediaChunksRef.current.length,
-      mimeType: mimeTypeRef.current,
-      ...extra,
-    })
-  }, [])
-
-  const attachRecorder = useCallback(
-    (stream: MediaStream) => {
-      const mimeType = pickMimeType()
-      mimeTypeRef.current = mimeType
-      initChunkRef.current = null
-      mediaChunksRef.current = []
-      isFirstChunkRef.current = true
-      totalChunkCountRef.current = 0
-      totalBytesRecordedRef.current = 0
-
-      const recorder = new MediaRecorder(stream, { mimeType })
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size === 0) return
-
-        totalChunkCountRef.current += 1
-        totalBytesRecordedRef.current += event.data.size
-
-        if (isFirstChunkRef.current) {
-          initChunkRef.current = event.data
-          isFirstChunkRef.current = false
-          logClipPipeline('buffer:initChunk', {
-            mimeType,
-            initChunk: summarizeBlob(event.data),
-            chunkIndex: totalChunkCountRef.current,
-            totalBytesRecorded: totalBytesRecordedRef.current,
-          })
-          updateBufferedMs()
-          return
-        }
-
-        mediaChunksRef.current.push({ blob: event.data, startMs: Date.now() })
-        pruneOldMediaChunks()
-
-        logClipPipeline('buffer:mediaChunk', {
-          mediaChunkCount: mediaChunksRef.current.length,
-          latestChunkBytes: event.data.size,
-          chunkIndex: totalChunkCountRef.current,
-          totalBytesRecorded: totalBytesRecordedRef.current,
-          bufferedMs: bufferLengthSecRef.current * 1000,
-        })
-      }
-
-      mediaRecorderRef.current = recorder
-      recorder.start(CHUNK_TIMESLICE_MS)
-
-      if (recorder.state !== 'recording') {
-        throw new Error('Microphone recorder failed to start.')
-      }
-
-      logClipPipeline('buffer:recorderStarted', {
-        mimeType,
-        timesliceMs: CHUNK_TIMESLICE_MS,
-        recorderState: recorder.state,
-        mediaRecorderStarted: recorder.state === 'recording',
-      })
-    },
-    [pruneOldMediaChunks, updateBufferedMs],
-  )
-
-  const notifyRecordingIssue = useCallback((body: string) => {
-    setError(body)
-    void window.electronAPI?.recorder?.notify({
-      title: 'SlipUpClipz',
-      body,
-    })
   }, [])
 
   const teardownRecording = useCallback(() => {
-    clearPruneTimer()
-    stopMicMonitor()
-
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop()
-    }
-
-    mediaRecorderRef.current = null
+    stopLevelTimer()
+    stopGraph()
     releaseStream()
-    initChunkRef.current = null
-    mediaChunksRef.current = []
-
+    ringRef.current = null
     if (usingSystemLoopbackRef.current) {
       usingSystemLoopbackRef.current = false
       void releaseSystemAudioCapture()
     }
-
     setIsListening(false)
     setMicrophoneLabel(null)
-  }, [clearPruneTimer, releaseStream, stopMicMonitor])
+    setMicLevelPercent(0)
+    setBufferedMs(0)
+  }, [releaseStream, stopGraph, stopLevelTimer])
 
-  const scheduleAutoRestart = useCallback(
-    (reason: string) => {
-      if (restartTimerRef.current !== null || isStartingRef.current) {
-        return
-      }
+  teardownRef.current = teardownRecording
 
-      logClipPipeline('buffer:autoRestartScheduled', { reason })
-      teardownRecording()
-      notifyRecordingIssue(`Recording stopped (${reason}). Restarting audio capture...`)
+  const publishLevels = useCallback(() => {
+    const ring = ringRef.current
+    setBufferedMs(bufferedMilliseconds(ring, replayWindowSeconds(bufferLengthSecRef.current)))
+  }, [])
 
-      restartTimerRef.current = window.setTimeout(() => {
-        restartTimerRef.current = null
-        void startListeningRef.current().then((started) => {
-          if (started) {
-            notifyRecordingIssue('Microphone recording restarted.')
-            window.setTimeout(() => setError(null), 4000)
-          }
-        })
-      }, 1500)
-    },
-    [notifyRecordingIssue, teardownRecording],
-  )
+  const scheduleAutoRestart = useCallback((reason: string) => {
+    if (restartTimerRef.current !== null || isStartingRef.current) return
+    if (!shouldRestartCapture({
+      isTestingMic: isTestingRef.current,
+      trackLive: false,
+      capturing: capturingRef.current,
+    })) {
+      logClipPipeline('buffer:autoRestartSkipped', { reason, testing: true })
+      return
+    }
+
+    logClipPipeline('buffer:autoRestartScheduled', { reason })
+    teardownRecording()
+    setError(`Recording stopped (${reason}). Restarting audio capture...`)
+
+    restartTimerRef.current = window.setTimeout(() => {
+      restartTimerRef.current = null
+      void startListeningRef.current().then((started) => {
+        if (started) {
+          setError('Audio capture restarted.')
+          window.setTimeout(() => setError(null), 4000)
+        }
+      })
+    }, 1500)
+  }, [teardownRecording])
 
   scheduleAutoRestartRef.current = scheduleAutoRestart
 
-  const handleTrackEnded = useCallback(() => {
-    logClipPipeline('buffer:trackEnded', {})
-    scheduleAutoRestartRef.current('track-ended')
+  const attachPcmCapture = useCallback((stream: MediaStream) => {
+    const context = new AudioContext()
+    const source = context.createMediaStreamSource(stream)
+    const trackChannels = stream.getAudioTracks()[0]?.getSettings().channelCount ?? 1
+    const channelCount = Math.max(1, Math.min(2, trackChannels || 1))
+    const processor = context.createScriptProcessor(4096, channelCount, channelCount)
+    const mute = context.createGain()
+    mute.gain.value = 0
+    source.connect(processor)
+    processor.connect(mute)
+    mute.connect(context.destination)
+
+    processor.onaudioprocess = (event) => {
+      if (!capturingRef.current) return
+      const input = event.inputBuffer
+      const channelCount = Math.max(1, input.numberOfChannels)
+      let ring = ringRef.current
+      if (!ring || ring.channelCount !== channelCount || ring.sampleRate !== context.sampleRate) {
+        ring = createPcmRing(context.sampleRate, channelCount)
+        ringRef.current = ring
+      }
+      const block: Float32Array[] = []
+      for (let channel = 0; channel < channelCount; channel += 1) {
+        block.push(input.getChannelData(channel))
+      }
+      appendPcmBlock(ring, block)
+      const peak = peakOfSamples(block[0] ?? [])
+      setMicLevelPercent(Math.round(Math.min(1, peak * 8) * 100))
+    }
+
+    graphRef.current = { context, source, processor, mute }
+    capturingRef.current = true
+    void context.resume()
   }, [])
 
-  const stopRecorderAndCollectFinalChunks = useCallback(
-    async (recorder: MediaRecorder): Promise<Blob[]> => {
-      const finalChunks: Blob[] = []
-
-      await new Promise<void>((resolve) => {
-        const onData = (event: BlobEvent) => {
-          if (event.data.size === 0) return
-
-          finalChunks.push(event.data)
-          totalChunkCountRef.current += 1
-          totalBytesRecordedRef.current += event.data.size
-
-          logClipPipeline('buffer:stopChunk', {
-            bytes: event.data.size,
-            chunkIndex: totalChunkCountRef.current,
-            totalBytesRecorded: totalBytesRecordedRef.current,
-          })
-        }
-
-        recorder.addEventListener('dataavailable', onData)
-        recorder.addEventListener(
-          'stop',
-          () => {
-            recorder.removeEventListener('dataavailable', onData)
-            resolve()
-          },
-          { once: true },
-        )
-        recorder.stop()
-      })
-
-      return finalChunks
-    },
-    [],
-  )
-
-  const recordDirectTestCapture = useCallback(async (): Promise<RecordingResult | null> => {
-    const stream = streamRef.current
-    if (!stream) {
-      setError('Microphone is not ready yet.')
-      logClipPipeline('clip:directTestAborted', { reason: 'no-stream' })
-      return null
-    }
-
-    logCaptureStats('clip:directTestStart', {
-      bypassReplayBuffer: true,
-      durationSec: DIRECT_RECORD_TEST_SECONDS,
-    })
-
-    clearPruneTimer()
-
-    const existing = mediaRecorderRef.current
-    if (existing && existing.state === 'recording') {
-      await stopRecorderAndCollectFinalChunks(existing)
-    }
-    mediaRecorderRef.current = null
-    initChunkRef.current = null
-    mediaChunksRef.current = []
-
-    const mimeType = pickMimeType()
-    mimeTypeRef.current = mimeType
-    const chunks: Blob[] = []
-    const recorder = new MediaRecorder(stream, { mimeType })
-
-    const blobPromise = new Promise<Blob | null>((resolve) => {
-      recorder.ondataavailable = (event) => {
-        if (event.data.size === 0) return
-        chunks.push(event.data)
-        logClipPipeline('clip:directTestChunk', {
-          chunkIndex: chunks.length,
-          bytes: event.data.size,
-          totalBytesRecorded: chunks.reduce((sum, part) => sum + part.size, 0),
-        })
-      }
-      recorder.onstop = async () => {
-        if (chunks.length === 0) {
-          resolve(null)
-          return
-        }
-
-        const blob = new Blob(chunks, { type: blobBaseMimeType(mimeType) })
-        const container = await inspectAudioContainer(blob)
-        logClipPipeline('clip:directTestCaptured', {
-          mimeType,
-          blob: summarizeBlob(blob),
-          chunkCount: chunks.length,
-          totalBytes: blob.size,
-          mediaRecorderStarted: true,
-          container,
-        })
-        resolve(blob)
-      }
-    })
-
-    recorder.start()
-    logClipPipeline('clip:directTestRecording', {
-      mimeType,
-      recorderState: recorder.state,
-      mediaRecorderStarted: recorder.state === 'recording',
-      durationSec: DIRECT_RECORD_TEST_SECONDS,
-    })
-
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, DIRECT_RECORD_TEST_SECONDS * 1000)
-    })
-
-    if (recorder.state === 'recording') {
-      recorder.stop()
-    }
-
-    const blob = await blobPromise
-
-    attachRecorder(stream)
-    pruneTimerRef.current = window.setInterval(pruneOldMediaChunks, 500)
-
-    if (!blob || blob.size === 0) {
-      setError('Direct test recording produced no audio.')
-      logClipPipeline('clip:directTestAborted', { reason: 'empty-blob' })
-      return null
-    }
-
-    return {
-      blob,
-      mimeType: blob.type || blobBaseMimeType(mimeType),
-      durationMs: DIRECT_RECORD_TEST_SECONDS * 1000,
-    }
-  }, [attachRecorder, clearPruneTimer, logCaptureStats, pruneOldMediaChunks, stopRecorderAndCollectFinalChunks])
-
-  const testMicrophone = useCallback(async (): Promise<boolean> => {
-    const stream = streamRef.current
-    const analyser = micMonitorRef.current?.analyser
-
-    if (!stream || !isListening) {
-      setMicTestMessage('Microphone is not active. Grant permission and try again.')
-      return false
-    }
-
-    const diagnostics = getMicTrackDiagnostics(stream)
-    if (!diagnostics.hasAudioTrack) {
-      logClipPipeline('mic:testAborted', {
-        reason: 'noAudioTrack',
-        mic: diagnostics,
-      })
-      setMicTestMessage('No audio track is being received from the microphone.')
-      return false
-    }
-
-    setIsTestingMic(true)
-    setMicTestMessage(`Recording ${MIC_TEST_SECONDS} seconds...`)
-    setError(null)
-
-    clearPruneTimer()
-
-    const existing = mediaRecorderRef.current
-    if (existing && existing.state === 'recording') {
-      await stopRecorderAndCollectFinalChunks(existing)
-    }
-    mediaRecorderRef.current = null
-
-    try {
-      const mimeType = pickMimeType()
-      const chunks: Blob[] = []
-      const recorder = new MediaRecorder(stream, { mimeType })
-
-      const blobPromise = new Promise<Blob | null>((resolve) => {
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            chunks.push(event.data)
-          }
-        }
-        recorder.onstop = () => {
-          if (chunks.length === 0) {
-            resolve(null)
-            return
-          }
-          resolve(new Blob(chunks, { type: blobBaseMimeType(mimeType) }))
-        }
-      })
-
-      recorder.start()
-
-      const livePeakPromise = analyser
-        ? sampleAnalyserPeak(analyser, MIC_TEST_SECONDS * 1000)
-        : Promise.resolve(0)
-
-      await new Promise((resolve) => {
-        window.setTimeout(resolve, MIC_TEST_SECONDS * 1000)
-      })
-
-      if (recorder.state === 'recording') {
-        recorder.stop()
-      }
-
-      const [blob, livePeak] = await Promise.all([blobPromise, livePeakPromise])
-
-      if (!blob || blob.size === 0) {
-        logClipPipeline('mic:testAborted', {
-          reason: 'emptyBlob',
-          livePeakDuringRecording: livePeak,
-          mic: diagnostics,
-        })
-        setMicTestMessage('No audio data was captured during the test recording.')
-        return false
-      }
-
-      const blobAnalysis = await analyzeBlobSamples(blob)
-
-      const streamSampleAnalysis: MicSampleAnalysis = {
-        silent: livePeak < 0.001,
-        peak: livePeak,
-        rms: livePeak / Math.sqrt(2),
-        allZeros: livePeak === 0,
-        sampleCount: 0,
-        reason: livePeak === 0 ? 'allZeros' : livePeak < 0.001 ? 'allZeros' : 'ok',
-      }
-
-      logMicSilenceAnalysis(
-        'mic:testAnalysis',
-        streamSampleAnalysis,
-        blobAnalysis,
-        livePeak,
-        diagnostics,
-      )
-
-      const silent =
-        !diagnostics.hasAudioTrack ||
-        diagnostics.muted ||
-        livePeak < 0.001 ||
-        blobAnalysis.silent ||
-        blobAnalysis.allZeros
-
-      if (silent) {
-        const reason = !diagnostics.hasAudioTrack
-          ? 'no audio track is being received'
-          : diagnostics.muted
-            ? 'the microphone track is muted'
-            : blobAnalysis.allZeros
-              ? 'decoded audio samples are all zeros'
-              : livePeak < 0.001
-                ? 'live input level stayed at zero'
-                : 'audio level is too low'
-        logClipPipeline('mic:testSilent', {
-          reason,
-          livePeakDuringRecording: livePeak,
-          blobAnalysis,
-          mic: diagnostics,
-        })
-        setMicTestMessage(`Test recording is silent: ${reason}.`)
-      } else {
-        setMicTestMessage('Playing back test recording...')
-      }
-
-      await playBlobAudio(blob)
-
-      if (silent) {
-        setMicTestMessage(
-          'Microphone test finished, but the recording was silent. Check Windows microphone privacy settings and the selected input device.',
-        )
-        return false
-      }
-
-      setMicTestMessage('Microphone test passed. You should have heard your recording.')
-      return true
-    } catch (caught) {
-      logClipPipelineError('mic:testFailed', caught, {
-        mic: getMicTrackDiagnostics(stream),
-      })
-      setMicTestMessage('Microphone test failed. See the console for details.')
-      return false
-    } finally {
-      attachRecorder(stream)
-      pruneTimerRef.current = window.setInterval(pruneOldMediaChunks, 500)
-      setIsTestingMic(false)
-    }
-  }, [
-    attachRecorder,
-    clearPruneTimer,
-    isListening,
-    pruneOldMediaChunks,
-    stopRecorderAndCollectFinalChunks,
-  ])
-
   const startListening = useCallback(async (): Promise<boolean> => {
-    if (isStartingRef.current) {
-      return false
-    }
+    if (isTestingRef.current) return false
 
+    const token = ++startTokenRef.current
     const config = captureConfigRef.current
     const isMicrophoneSource = config.source === 'microphone'
-
     isStartingRef.current = true
     setError(null)
     setIsListening(false)
     setMicrophoneLabel(null)
     setIsRequestingMic(true)
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('Audio capture is not supported in this environment.')
-      setIsRequestingMic(false)
-      isStartingRef.current = false
-      return false
-    }
-
-    if (isMicrophoneSource) {
-      const permission = await queryMicrophonePermission()
-      micPermissionRef.current = permission
-      logClipPipeline('buffer:permission', {
-        permission,
-        micPermissionGranted: permission === 'granted' || permission === 'prompt',
-        replayAudioSource: config.source,
-      })
-
-      if (permission === 'denied') {
-        setError('Microphone permission was denied. Allow access in system settings and reload the app.')
-        setIsRequestingMic(false)
-        isStartingRef.current = false
-        return false
-      }
-    } else {
-      micPermissionRef.current = 'granted'
-      logClipPipeline('buffer:permission', {
-        permission: 'not-required',
-        replayAudioSource: config.source,
-      })
-    }
+    teardownRef.current()
+    const stillCurrent = () => token === startTokenRef.current && mountedRef.current
 
     try {
-      let stream: MediaStream
-      let label: string
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError('Audio capture is not supported in this environment.')
+        return false
+      }
 
       if (isMicrophoneSource) {
-        const captured = await acquireMicrophoneStream()
+        const permission = await queryMicrophonePermission()
+        if (!stillCurrent()) return false
+        if (permission === 'denied') {
+          setError('Microphone permission was denied. Allow access in system settings and reload the app.')
+          return false
+        }
+      }
+
+      if (!stillCurrent()) return false
+
+      let stream: MediaStream
+      let label: string
+      if (config.source === 'system') {
+        usingSystemLoopbackRef.current = true
+        const captured = await acquireReplayCaptureStream(config)
+        stream = captured.stream
+        label = captured.label
+      } else if (isMicrophoneSource) {
+        const captured = await acquireMicrophoneStream(config.audioInputDeviceId)
         stream = captured.stream
         label = captured.label
       } else {
-        if (config.source === 'system') {
-          usingSystemLoopbackRef.current = true
-        }
         const captured = await acquireReplayCaptureStream(config)
         stream = captured.stream
         label = captured.label
       }
 
-      const track = validateLiveAudioTrack(stream)
-
-      if (!track) {
+      const track = stream.getAudioTracks()[0]
+      if (!stillCurrent()) {
         stream.getTracks().forEach((entry) => entry.stop())
-        if (usingSystemLoopbackRef.current) {
-          usingSystemLoopbackRef.current = false
-          await releaseSystemAudioCapture()
-        }
+        return false
+      }
+      if (!track || track.readyState !== 'live') {
+        stream.getTracks().forEach((entry) => entry.stop())
         throw new DOMException('Audio track is not live.', 'NotReadableError')
       }
 
-      track.addEventListener('ended', handleTrackEnded)
-      track.addEventListener('mute', () => {
-        logClipPipeline('mic:trackMuted', { mic: getMicTrackDiagnostics(stream) })
-      })
-      track.addEventListener('unmute', () => {
-        logClipPipeline('mic:trackUnmuted', { mic: getMicTrackDiagnostics(stream) })
+      const actualId = track.getSettings().deviceId ?? null
+      if (isMicrophoneSource && !config.audioInputDeviceId && actualDeviceIdRef.current && actualId && actualDeviceIdRef.current !== actualId) {
+        setMicrophoneNotice(`The microphone in use changed to ${label}.`)
+      } else if (isMicrophoneSource) {
+        setMicrophoneNotice(null)
+      }
+      if (isMicrophoneSource) actualDeviceIdRef.current = actualId
+
+      track.addEventListener('ended', () => {
+        logClipPipeline('buffer:trackEnded', {})
+        scheduleAutoRestartRef.current('track-ended')
       })
 
       streamRef.current = stream
-      beginMicMonitor(stream)
-      attachRecorder(stream)
-
-      const diagnostics = logMicTrackDiagnostics('mic:streamReady', stream)
-      if (diagnostics.muted) {
-        logClipPipeline('mic:mutedInput', { mic: diagnostics })
+      ringRef.current = null
+      attachPcmCapture(stream)
+      if (isMicrophoneSource && !config.audioInputDeviceId && actualId) {
+        void bindHearMyselfToDevice(actualId)
       }
-
-      micPermissionRef.current = 'granted'
-      pruneTimerRef.current = window.setInterval(pruneOldMediaChunks, 500)
       setMicrophoneLabel(label)
       setIsListening(true)
-
+      stopLevelTimer()
+      levelTimerRef.current = window.setInterval(publishLevels, 250)
       logClipPipeline('buffer:listening', {
-        trackCount: stream.getAudioTracks().length,
-        trackState: track.readyState,
-        trackEnabled: track.enabled,
         inputLabel: label,
+        deviceId: actualId,
+        requestedDeviceId: config.audioInputDeviceId,
         replayAudioSource: config.source,
       })
-
       return true
     } catch (caught) {
+      if (!stillCurrent()) return false
       if (usingSystemLoopbackRef.current) {
         usingSystemLoopbackRef.current = false
         await releaseSystemAudioCapture()
       }
-
-      logClipPipelineError('buffer:captureFailed', caught, {
-        replayAudioSource: config.source,
-      })
+      logClipPipelineError('buffer:captureFailed', caught, { replayAudioSource: config.source })
       setError(getMicrophoneErrorMessage(caught))
-      stopMicMonitor()
-      releaseStream()
-      setIsListening(false)
-      setMicrophoneLabel(null)
+      teardownRef.current()
       return false
     } finally {
-      setIsRequestingMic(false)
-      isStartingRef.current = false
+      if (token === startTokenRef.current) {
+        setIsRequestingMic(false)
+        isStartingRef.current = false
+      }
     }
-  }, [attachRecorder, beginMicMonitor, handleTrackEnded, pruneOldMediaChunks, releaseStream, stopMicMonitor])
+  }, [attachPcmCapture, publishLevels, stopLevelTimer])
 
   startListeningRef.current = startListening
 
-  useEffect(() => {
-    void startListening()
+  const testMicrophone = useCallback(async (): Promise<boolean> => {
+    if (isTestingRef.current) return false
+    if (!streamRef.current || !capturingRef.current) {
+      setMicTestMessage('Microphone is not active. Grant permission and try again.')
+      return false
+    }
 
+    const startedAt = ringRef.current?.totalFramesWritten ?? 0
+    isTestingRef.current = true
+    setIsTestingMic(true)
+    setMicTestSecondsLeft(MIC_TEST_SECONDS)
+    setMicTestMessage(null)
+    setError(null)
+    const deadline = performance.now() + MIC_TEST_SECONDS * 1000
+    const countdown = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadline - performance.now()) / 1000))
+      if (mountedRef.current) setMicTestSecondsLeft(remaining)
+    }, 200)
+
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, MIC_TEST_SECONDS * 1000))
+      if (!mountedRef.current) return false
+
+      const ring = ringRef.current
+      const framesWritten = (ring?.totalFramesWritten ?? startedAt) - startedAt
+      const capturedSeconds = ring && framesWritten > 0
+        ? Math.min(MIC_TEST_SECONDS, framesWritten / ring.sampleRate)
+        : 0
+      const channels = ring && capturedSeconds > 0 ? copyRecentFrames(ring, capturedSeconds) : []
+      const samples = channels[0] ?? new Float32Array()
+      const wav = samples.length > 0 && ring ? encodePcmWav(channels, ring.sampleRate) : new Uint8Array()
+      const validation = samples.length > 0 ? validateWavRecording(wav) : null
+      const classification = classifyMicTest({
+        frameCount: samples.length,
+        peak: peakOfSamples(samples),
+        decodeError: validation && !validation.ok ? validation.error : null,
+      })
+
+      logClipPipeline('mic:testAnalysis', {
+        framesWritten,
+        classification: classification.kind,
+        message: classification.kind === 'ok' ? '' : classification.message,
+      })
+
+      if (classification.kind !== 'ok') {
+        setMicTestMessage(classification.message)
+        return false
+      }
+
+      setMicTestSecondsLeft(0)
+      setMicTestMessage('Playing back test recording...')
+      const blob = wavBlob(wav)
+      await playBlobAudio(blob, micTestPlaybackBudget(validation?.ok ? validation.durationMs : MIC_TEST_SECONDS * 1000))
+      if (mountedRef.current) {
+        setMicTestMessage('Microphone test passed. You should have heard your recording.')
+      }
+      return true
+    } catch (caught) {
+      logClipPipelineError('mic:testFailed', caught, {})
+      if (mountedRef.current) setMicTestMessage('Microphone test failed before it could finish.')
+      return false
+    } finally {
+      window.clearInterval(countdown)
+      isTestingRef.current = false
+      if (mountedRef.current) {
+        setIsTestingMic(false)
+        setMicTestSecondsLeft(MIC_TEST_SECONDS)
+      }
+    }
+  }, [])
+
+  const clipBuffer = useCallback(async (): Promise<RecordingResult | null> => {
+    if (!canCaptureClip({
+      isListening: Boolean(streamRef.current) && capturingRef.current,
+      isSaving: false,
+      isTestingMic: isTestingRef.current,
+    })) {
+      setError(isTestingRef.current
+        ? 'Wait for the microphone test to finish before clipping.'
+        : 'Audio capture is not ready yet.')
+      return null
+    }
+
+    const ring = ringRef.current
+    if (!ring) {
+      setError('Nothing in the replay buffer yet. Keep the audio playing for a moment.')
+      return null
+    }
+
+    const channels = copyRecentFrames(ring, replayWindowSeconds(bufferLengthSecRef.current))
+    if (!channels[0]?.length) {
+      setError('Nothing in the replay buffer yet. Keep the audio playing for a moment.')
+      return null
+    }
+    const wav = encodePcmWav(channels, ring.sampleRate)
+    const validation = validateWavRecording(wav)
+    if (!validation.ok) {
+      setError(validation.error)
+      logClipPipeline('clip:rejected', { error: validation.error, bytes: wav.byteLength })
+      return null
+    }
+
+    logClipPipeline('clip:captured', {
+      mimeType: 'audio/wav',
+      bytes: wav.byteLength,
+      durationMs: validation.durationMs,
+      frameCount: validation.frameCount,
+      sampleRate: validation.sampleRate,
+    })
+
+    return {
+      blob: wavBlob(wav),
+      mimeType: 'audio/wav',
+      durationMs: validation.durationMs,
+    }
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    void startListeningRef.current()
     return () => {
+      mountedRef.current = false
+      isTestingRef.current = false
+      startTokenRef.current += 1
+      isStartingRef.current = false
       if (restartTimerRef.current !== null) {
         window.clearTimeout(restartTimerRef.current)
         restartTimerRef.current = null
       }
-
-      teardownRecording()
+      teardownRef.current()
     }
-  }, [startListening, teardownRecording, captureConfig.source, captureConfig.virtualAudioInputDeviceId])
+  }, [captureConfig.source, captureConfig.virtualAudioInputDeviceId, captureConfig.audioInputDeviceId])
 
   useEffect(() => {
     if (!isListening) return
-
     const interval = window.setInterval(() => {
-      const stream = streamRef.current
-      const recorder = mediaRecorderRef.current
-      const track = stream?.getAudioTracks()[0]
-
-      if (!stream || !recorder || !track || track.readyState !== 'live') {
-        scheduleAutoRestartRef.current('watchdog-stream')
+      const track = streamRef.current?.getAudioTracks()[0]
+      const trackLive = track?.readyState === 'live'
+      if (!shouldRestartCapture({
+        isTestingMic: isTestingRef.current,
+        trackLive: Boolean(trackLive),
+        capturing: capturingRef.current && graphRef.current?.context.state !== 'closed',
+      })) {
         return
       }
-
-      if (recorder.state !== 'recording') {
-        scheduleAutoRestartRef.current('watchdog-recorder')
-      }
+      scheduleAutoRestartRef.current(trackLive ? 'watchdog-capture' : 'watchdog-stream')
     }, 3000)
-
     return () => window.clearInterval(interval)
   }, [isListening])
 
   useEffect(() => {
     void window.electronAPI?.recorder?.setStatus({ isListening })
   }, [isListening])
-
-  useEffect(() => {
-    function onVisibilityChange() {
-      if (document.visibilityState !== 'visible' || !isListening) return
-
-      const recorder = mediaRecorderRef.current
-      const track = streamRef.current?.getAudioTracks()[0]
-      if (!track || track.readyState !== 'live' || recorder?.state !== 'recording') {
-        scheduleAutoRestartRef.current('visibility-recover')
-      }
-    }
-
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
-  }, [isListening])
-
-  useEffect(() => {
-    pruneOldMediaChunks()
-  }, [bufferLengthSec, pruneOldMediaChunks])
-
-  const clipBuffer = useCallback(async (): Promise<RecordingResult | null> => {
-    if (BYPASS_REPLAY_BUFFER_FOR_DEBUG) {
-      return recordDirectTestCapture()
-    }
-
-    pruneOldMediaChunks()
-    logCaptureStats('clip:start')
-
-    const recorder = mediaRecorderRef.current
-    const stream = streamRef.current
-    if (!recorder || recorder.state !== 'recording' || !stream) {
-      setError('Microphone is not ready yet.')
-      logClipPipeline('clip:aborted', { reason: 'recorder-not-ready' })
-      return null
-    }
-
-    const mimeType = mimeTypeRef.current
-    const parts: Blob[] = []
-
-    if (initChunkRef.current && initChunkRef.current.size > 0) {
-      parts.push(initChunkRef.current)
-    }
-
-    for (const chunk of mediaChunksRef.current) {
-      if (chunk.blob.size > 0) {
-        parts.push(chunk.blob)
-      }
-    }
-
-    const hasInit = parts.length > 0
-    const mediaChunkCount = mediaChunksRef.current.length
-
-    if (!hasInit && mediaChunkCount === 0) {
-      setError('Nothing in the replay buffer yet. Keep talking for a moment.')
-      logClipPipeline('clip:aborted', { reason: 'empty-buffer' })
-      return null
-    }
-
-    clearPruneTimer()
-    const finalChunks = await stopRecorderAndCollectFinalChunks(recorder)
-    mediaRecorderRef.current = null
-
-    for (const chunk of finalChunks) {
-      parts.push(chunk)
-    }
-
-    const blob = buildClipBlobFromParts(parts, mimeType)
-    if (!blob || blob.size === 0) {
-      setError('Could not capture audio from the replay buffer.')
-      logClipPipeline('clip:aborted', {
-        reason: 'empty-blob',
-        hasInit,
-        mediaChunkCount,
-        finalChunkCount: finalChunks.length,
-        partCount: parts.length,
-      })
-      return null
-    }
-
-    const container = await inspectAudioContainer(blob)
-    const windowMs = bufferLengthSecRef.current * 1000
-    const oldestMedia = mediaChunksRef.current[0]?.startMs
-    const durationMs =
-      windowMs <= 0
-        ? CHUNK_TIMESLICE_MS
-        : oldestMedia
-          ? Math.min(Date.now() - oldestMedia + CHUNK_TIMESLICE_MS, windowMs)
-          : CHUNK_TIMESLICE_MS
-
-    logClipPipeline('clip:captured', {
-      mimeType,
-      blob: summarizeBlob(blob),
-      blobSizeBeforeDecode: blob.size,
-      hasInitChunk: hasInit,
-      initChunkBytes: initChunkRef.current?.size ?? 0,
-      mediaChunkCount,
-      finalChunkCount: finalChunks.length,
-      partCount: parts.length,
-      totalChunksRecorded: totalChunkCountRef.current,
-      totalBytesRecorded: totalBytesRecordedRef.current,
-      container,
-      durationMs,
-    })
-
-    attachRecorder(stream)
-    pruneTimerRef.current = window.setInterval(pruneOldMediaChunks, 500)
-    logClipPipeline('buffer:recorderRestarted', {})
-
-    return {
-      blob,
-      mimeType: blob.type || blobBaseMimeType(mimeType),
-      durationMs,
-    }
-  }, [
-    attachRecorder,
-    buildClipBlobFromParts,
-    clearPruneTimer,
-    logCaptureStats,
-    pruneOldMediaChunks,
-    recordDirectTestCapture,
-    stopRecorderAndCollectFinalChunks,
-  ])
 
   const resetError = useCallback(() => setError(null), [])
 
@@ -918,8 +462,10 @@ export function useReplayBuffer(captureConfig: ReplayCaptureConfig) {
     isListening,
     isRequestingMic,
     microphoneLabel,
+    microphoneNotice,
     micLevelPercent,
     isTestingMic,
+    micTestSecondsLeft,
     micTestMessage,
     testMicrophone,
     error,

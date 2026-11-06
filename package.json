@@ -1,6 +1,6 @@
 {
   "name": "slipupclipz",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "SlipUpClipz desktop soundboard and instant replay clip studio",
   "author": "SlipUpClipz",
   "main": "dist-electron/main.js",
@@ -20,8 +20,8 @@
     "package:win-all": "npm run build && electron-builder --win nsis appx --x64 --publish never",
     "release": "npm run preflight:release && npm run release:clean && npm run build && electron-builder --win --publish always && npm run verify:release",
     "license:demo": "node scripts/generate-license.mjs",
-    "test:license": "npx tsx --test electron/licenseLogic.test.ts",
-    "website:test": "node --test netlify/lib/email.test.cjs tests/netlify/contact-support.test.cjs tests/netlify/support-assistant.test.cjs tests/netlify/storage.test.cjs tests/netlify/idempotency.test.cjs && npx tsx --test website/src/lib/checkout.test.ts website/src/lib/contactForm.test.ts website/src/lib/supportLinks.test.ts",
+    "test:license": "npx tsx --test electron/licenseLogic.test.ts electron/deviceId.test.ts electron/billingPortal.test.ts electron/profileBackup.test.ts electron/updateChannel.test.ts shared/entitlements.test.ts src/lib/libraryPersistence.test.ts",
+    "website:test": "node --test netlify/lib/email.test.cjs tests/netlify/contact-support.test.cjs tests/netlify/support-assistant.test.cjs tests/netlify/storage.test.cjs tests/netlify/idempotency.test.cjs tests/netlify/survey.test.cjs tests/netlify/intro-discount.test.cjs tests/netlify/license-validation.test.cjs tests/netlify/download-redirect.test.cjs tests/netlify/subscription-policy.test.cjs tests/netlify/device-seat.test.cjs tests/netlify/legacy-client.test.cjs && npx tsx --test website/src/lib/checkout.test.ts website/src/lib/contactForm.test.ts website/src/lib/supportLinks.test.ts website/src/lib/shorts.test.ts website/src/lib/cropFrame.test.ts website/src/lib/audioPlayback.test.ts website/src/lib/scrollToSection.test.ts",
     "website:dev": "vite --config website/vite.config.ts",
     "website:build": "node scripts/build-website.mjs",
     "website:preview": "vite preview --config website/vite.config.ts",
@@ -83,6 +83,26 @@
       {
         "from": "build/icon-64.png",
         "to": "icon-64.png"
+      },
+      {
+        "from": "ai/server.py",
+        "to": "ai-app/server.py"
+      },
+      {
+        "from": "ai/generation_guard.py",
+        "to": "ai-app/generation_guard.py"
+      },
+      {
+        "from": "ai/reference_audio.py",
+        "to": "ai-app/reference_audio.py"
+      },
+      {
+        "from": "ai/server_temp_outputs.py",
+        "to": "ai-app/server_temp_outputs.py"
+      },
+      {
+        "from": "shared/aiComponentPin.json",
+        "to": "ai-component-pin.json"
       }
     ],
     "publish": {
@@ -104,6 +124,7 @@
     },
     "nsis": {
       "oneClick": false,
+      "deleteAppDataOnUninstall": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,

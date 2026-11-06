@@ -1,0 +1,15 @@
+AI Voice Clip Cloning disclosure
+
+The voice engine is Qwen3-TTS 12Hz 0.6B Base (Qwen/Qwen3-TTS-12Hz-0.6B-Base). The 1.7B checkpoint is not included.
+
+Qwen3-TTS code and the 0.6B Base weights are used under the Apache License 2.0. The license text ships in the component at NOTICES\licenses\qwen-tts-apache-2.0.txt.
+
+Local transcription uses faster-whisper (MIT, SYSTRAN) and the Systran faster-whisper tiny.en weights. See NOTICES\licenses\faster-whisper-mit.txt.
+
+PyTorch 2.14.1+cu126 supplies the GPU runtime libraries used for inference. Its license is NOTICES\licenses\pytorch-license.txt. This component does not include the CUDA development toolkit. A current NVIDIA driver is still required.
+
+Python 3.11.3, the embeddable package from python.org, is covered by the Python Software Foundation License.
+
+Generation uses the existing production settings: reference clips from 0.8 to 7 seconds, local transcription, speaker permission before the worker starts, and the model unloads after 120 seconds idle. English only. Results are not guaranteed to sound like the speaker. A supported NVIDIA GPU is required. The app does not claim zero performance impact.
+
+The desktop interface does not need to show the model name. These notices stay with the installed voice engine.

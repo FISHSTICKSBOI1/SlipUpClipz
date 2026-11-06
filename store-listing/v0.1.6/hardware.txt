@@ -1,0 +1,10 @@
+Hardware and system requirements
+
+- Windows 10 version 1809 (build 17763) or later, 64-bit.
+- The soundboard, replay, hotkeys, and routing work without a GPU.
+- AI Voice Clip Cloning needs an NVIDIA GPU that the installed PyTorch CUDA 12.6 runtime can use, plus a current NVIDIA driver.
+- Do not ask customers to install Python or the CUDA development toolkit.
+- The Microsoft Store package includes the voice engine. Allow at least 16 GB of free disk space to download and install it.
+- A website installation is smaller. Adding the optional voice engine needs about 16 GB free before installation and about 8 GB after the archive is extracted.
+- A microphone is used for replay and for reference clips.
+- Internet is used for license checks and, on website installations, for the optional voice-engine download. Generation itself stays on the computer.

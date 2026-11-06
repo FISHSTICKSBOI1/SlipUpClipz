@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CLIP_RECORD_HOTKEY } from '@shared/appTypes'
+import { captureGoalPlan, captureGoalSettingsPatch, type CaptureGoal } from '@shared/setupGuide'
 import { useAppSettings } from '../../context/AppSettingsContext'
 import { useOnboardingTour } from '../../context/OnboardingTourContext'
 import { useAudioOutputDevices } from '../../hooks/useAudioOutputDevices'
 import { EXTERNAL_LINKS, openExternalLink } from '../../lib/externalLinks'
+import { useModalScrim } from '../../hooks/useModalScrim'
 import { getTourTargetElement, type TourTargetId } from '../../lib/onboardingTour'
 
 type SpotlightRect = {
@@ -42,34 +44,39 @@ function measureTarget(targetId: TourTargetId): SpotlightRect | null {
 function placeCard(
   spotlight: SpotlightRect | null,
   centered: boolean,
+  cardHeight: number,
 ): CardPosition {
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  const cardHeight = 280
+  const cardWidth = Math.min(CARD_WIDTH, viewportWidth - PAD * 2)
+  const height = Math.min(Math.max(cardHeight, 160), viewportHeight - PAD * 2)
 
   if (centered || !spotlight) {
     return {
-      top: Math.max(PAD, (viewportHeight - cardHeight) / 2),
-      left: Math.max(PAD, (viewportWidth - CARD_WIDTH) / 2),
+      top: Math.max(PAD, (viewportHeight - height) / 2),
+      left: Math.max(PAD, (viewportWidth - cardWidth) / 2),
     }
   }
 
   const belowTop = spotlight.top + spotlight.height + PAD + 8
-  const aboveTop = spotlight.top - cardHeight - PAD
-  const preferBelow = belowTop + cardHeight < viewportHeight - PAD
+  const aboveTop = spotlight.top - height - PAD
+  const preferBelow = belowTop + height < viewportHeight - PAD
   const top = preferBelow
     ? belowTop
     : aboveTop > PAD
       ? aboveTop
-      : clamp(spotlight.top, PAD, viewportHeight - cardHeight - PAD)
+      : PAD
 
   const left = clamp(
-    spotlight.left + spotlight.width / 2 - CARD_WIDTH / 2,
+    spotlight.left + spotlight.width / 2 - cardWidth / 2,
     PAD,
-    viewportWidth - CARD_WIDTH - PAD,
+    Math.max(PAD, viewportWidth - cardWidth - PAD),
   )
 
-  return { top, left }
+  return {
+    top: clamp(top, PAD, Math.max(PAD, viewportHeight - height - PAD)),
+    left,
+  }
 }
 
 export function OnboardingTourOverlay() {
@@ -87,18 +94,21 @@ export function OnboardingTourOverlay() {
     cancelExit,
     confirmExit,
   } = useOnboardingTour()
-  const { settings } = useAppSettings()
+  useModalScrim(0.7, Boolean(isActive && step))
+  const { settings, updateSettings } = useAppSettings()
+  const [goalMessage, setGoalMessage] = useState<string | null>(null)
   const { hasVirtualOutput, isLoading: devicesLoading } = useAudioOutputDevices()
 
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
   const [cardPos, setCardPos] = useState<CardPosition>({ top: 80, left: 80 })
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const refreshLayout = useCallback(() => {
     if (!step) return
     const centered = step.placement === 'center' || !step.targetId
     const nextSpotlight = step.targetId ? measureTarget(step.targetId) : null
     setSpotlight(nextSpotlight)
-    setCardPos(placeCard(nextSpotlight, centered))
+    setCardPos(placeCard(nextSpotlight, centered, cardRef.current?.offsetHeight ?? 280))
 
     if (step.targetId) {
       getTourTargetElement(step.targetId)?.scrollIntoView({
@@ -162,6 +172,13 @@ export function OnboardingTourOverlay() {
     return null
   }
 
+  function chooseCaptureGoal(goal: CaptureGoal) {
+    const plan = captureGoalPlan(goal)
+    const patch = captureGoalSettingsPatch(goal)
+    if (patch) void updateSettings(patch)
+    setGoalMessage(plan.summary)
+  }
+
   const isWelcome = step.id === 'welcome'
   const isFinal = Boolean(step.isFinal)
   const isCentered = step.placement === 'center' || !step.targetId
@@ -217,9 +234,10 @@ export function OnboardingTourOverlay() {
 
       <div
         role="dialog"
+        ref={cardRef}
         aria-modal="true"
         aria-labelledby="onboarding-tour-title"
-        className="absolute z-[1001] w-[min(360px,calc(100vw-24px))] rounded-2xl border border-surface-border bg-surface-raised p-5 shadow-2xl transition-all duration-300 ease-out"
+        className="absolute z-[1001] max-h-[calc(100vh-1.5rem)] w-[min(360px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-surface-border bg-surface-raised p-5 shadow-2xl transition-all duration-300 ease-out"
         style={{ top: cardPos.top, left: cardPos.left }}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -270,35 +288,36 @@ export function OnboardingTourOverlay() {
         )}
 
         {step.id === 'replay-source' && (
-          <ul className="mb-4 space-y-1.5 text-xs text-gray-400">
-            <li>
-              <span className="text-gray-200">Microphone</span> — capture your voice input.
-            </li>
-            <li>
-              <span className="text-gray-200">System audio</span> — capture game and Discord sound
-              when available.
-            </li>
-            <li>
-              <span className="text-gray-200">Virtual device</span> — capture from VB-Cable or
-              VoiceMeeter.
-            </li>
-          </ul>
+          <div className="mb-4 space-y-2">
+            {(
+              [
+                ['teammates', 'Record what I hear'],
+                ['myself', 'Record my microphone'],
+                ['both', 'Record myself and what I hear'],
+              ] as const
+            ).map(([goal, label]) => (
+              <button
+                key={goal}
+                type="button"
+                onClick={() => chooseCaptureGoal(goal)}
+                className="block w-full rounded-lg border border-white/10 px-3 py-2 text-left text-xs text-white hover:border-accent/40"
+              >
+                {label}
+              </button>
+            ))}
+            {goalMessage && <p className="text-xs leading-relaxed text-ink-muted">{goalMessage}</p>}
+          </div>
         )}
 
         {step.id === 'audio-setup' && (
           <ul className="mb-4 space-y-1.5 text-xs text-gray-400">
-            <li>Microphone volume controls the live mic level.</li>
-            <li>Soundboard volume controls clip playback level.</li>
-            <li>Mic On/Off controls whether the live microphone is sent to the virtual output.</li>
-            <li>Hear Myself controls whether you hear monitored audio locally.</li>
-            <li>
-              The virtual output is the device selected in Discord or the game as the microphone
-              input.
-            </li>
+            <li>Choose the soundboard output at the top of the page.</li>
+            <li>Hear Myself plays your microphone in those headphones.</li>
+            <li>The Live Audio Mixer sends your microphone with the soundboard when you turn it on.</li>
+            <li>Discord and the game still need their microphone set by you.</li>
             {showVirtualMissingHint && (
               <li className="text-amber-300">
-                Virtual audio routing is not configured yet. You can finish this later in the
-                Soundboard audio controls.
+                Virtual audio routing is not configured yet. You can finish this later in Settings.
               </li>
             )}
           </ul>

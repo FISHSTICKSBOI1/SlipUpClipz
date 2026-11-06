@@ -18,6 +18,7 @@ const CATEGORY_SHOT: Record<HelpCategoryId, ShotKey> = {
   discord: 'settings',
   'voice-effects': 'voiceEffects',
   updates: 'settings',
+  'ai-voice': 'settings',
 }
 
 const SLUG_SHOT: Record<string, ShotKey> = {
@@ -76,7 +77,17 @@ export function HelpArticlePage() {
         </header>
 
         <div className="mt-8 max-w-3xl">
-          <ScreenshotFrame shot={shot} alt={`SlipUpClipz — ${article.screenshotLabel}`} />
+          {article.omitScreenshot ? (
+            <p className="panel px-5 py-4 text-sm leading-relaxed text-slate-300">
+              The walkthrough is on the{' '}
+              <Link to={SITE.paths.features} className="text-glow-magenta hover:underline">
+                Features
+              </Link>{' '}
+              page. The published v{SITE.currentVersion} app does not include this feature yet.
+            </p>
+          ) : (
+            <ScreenshotFrame shot={shot} alt={`SlipUpClipz — ${article.screenshotLabel}`} />
+          )}
         </div>
 
         <ol className="mt-10 max-w-3xl list-decimal space-y-4 pl-5 text-sm leading-relaxed text-slate-300 sm:text-base">

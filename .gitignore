@@ -1,4 +1,5 @@
 node_modules
+ai/logs/
 dist
 dist-electron
 *.local

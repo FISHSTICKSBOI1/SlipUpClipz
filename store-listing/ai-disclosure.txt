@@ -1,0 +1,13 @@
+AI Voice Clip Cloning creates a new spoken clip from a recording already stored in SlipUpClipz and from text you type.
+
+- It runs on this computer. The reference recording and the generated audio are not uploaded to make the clip.
+- The speaker must confirm permission before generation starts.
+- The supported reference length is 0.8 to 7 seconds.
+- You can create one clip or three variations.
+- The words in the reference are transcribed on this computer.
+- English is the language that has been tested well enough to offer.
+- The result is synthetic speech. It may not match the speaker's voice. Do not use it to impersonate someone or to mislead others about who is speaking.
+- The engine is Qwen3-TTS 12Hz 0.6B Base, used under the Apache License 2.0. Transcription uses faster-whisper tiny.en. License texts are installed with the AI component in its NOTICES folder.
+- The component includes the PyTorch GPU libraries it needs. It does not install the CUDA development toolkit. An NVIDIA driver is still required.
+- The model unloads after about two minutes without a request so the GPU memory can be released.
+- Computers without a supported NVIDIA GPU keep the rest of SlipUpClipz and see a clear message instead of a crash.

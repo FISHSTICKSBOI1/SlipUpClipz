@@ -20,6 +20,8 @@ export type SupportKnowledgePayload = {
   }[]
   faq: { question: string; answer: string }[]
   recentChangelogHighlights: string[]
+  upcomingVersion?: string
+  upcomingHighlights: string[]
 }
 
 export function buildSupportKnowledgePayload(): SupportKnowledgePayload {
@@ -42,7 +44,10 @@ export function buildSupportKnowledgePayload(): SupportKnowledgePayload {
       question: item.question,
       answer: item.answer,
     })),
-    recentChangelogHighlights: CHANGELOG[0]?.highlights ?? [],
+    recentChangelogHighlights:
+      CHANGELOG.find((entry) => entry.status !== 'upcoming')?.highlights ?? [],
+    upcomingVersion: CHANGELOG.find((entry) => entry.status === 'upcoming')?.version,
+    upcomingHighlights: CHANGELOG.find((entry) => entry.status === 'upcoming')?.highlights ?? [],
   }
 }
 
@@ -81,8 +86,16 @@ export function formatSupportKnowledgeContext(payload: SupportKnowledgePayload):
   }
 
   if (payload.recentChangelogHighlights.length > 0) {
-    lines.push('=== Recent release highlights ===')
+    lines.push('=== Latest published release highlights ===')
     for (const highlight of payload.recentChangelogHighlights) {
+      lines.push(`- ${highlight}`)
+    }
+  }
+
+  if (payload.upcomingVersion && payload.upcomingHighlights.length > 0) {
+    lines.push('')
+    lines.push(`=== Upcoming ${payload.upcomingVersion} (not released, not in the public download) ===`)
+    for (const highlight of payload.upcomingHighlights) {
       lines.push(`- ${highlight}`)
     }
   }

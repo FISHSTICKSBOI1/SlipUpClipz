@@ -5,6 +5,8 @@ const {
   escapeHtml,
   normalizeFromAddress,
   buildSupportEmailPayload,
+  buildLicenseEmailHtml,
+  buildLicenseEmailText,
   getSupportToEmail,
 } = require('./email.cjs')
 
@@ -56,6 +58,16 @@ describe('email helpers', () => {
     assert.equal(payload.subject, '[SlipUpClipz Support] Mic issue')
     assert.match(payload.text, /Alex/)
     assert.match(payload.html, /Level meter is flat/)
+  })
+
+  it('tells the buyer how to cancel renewal without calling it a device removal', () => {
+    const html = buildLicenseEmailHtml({ licenseKey: 'SLIP-TEST-TEST-TEST' })
+    const text = buildLicenseEmailText({ licenseKey: 'SLIP-TEST-TEST-TEST' })
+    assert.match(html, /\/pricing#manage/)
+    assert.match(text, /pricing#manage/)
+    assert.match(html, /does not cancel billing/)
+    assert.match(text, /does not cancel billing/)
+    assert.doesNotMatch(html, /billing-portal/)
   })
 
   it('fails closed when SUPPORT_TO_EMAIL is missing', () => {

@@ -1,0 +1,11 @@
+Store-first rollout for SlipUpClipz 0.1.6
+
+Do not publish GitHub latest.yml as part of building these release candidates.
+
+1. Submit the MSIX with the same package family, SlipUpClipzLLC.SlipUpClipz_z6z50n1zy6nqj, at Store version 1.0.6.0. Wait until certification finishes and the package is available from the Store, not merely submitted.
+2. The Microsoft Store checks for that package on its own schedule, about once a day. Availability does not mean every customer has installed it. Customers who open the Store later still receive 1.0.6.0 when they update, as long as the listing remains the newer package.
+3. Keep LEGACY_DEVICE_GRACE_UNTIL unset. Older v0.1.5 clients stay able to validate. Do not set a cutoff until both the Store package and the website installer are actually available, and until you have decided how to reach customers who still have not updated.
+4. After the Store package has been available long enough that a customer checking the Store can install it, publish the website NSIS installer and only then update GitHub latest.yml to the signed 0.1.6 installer and its sha512 checksum. latest.yml must name the real installer file. Do not point it at a file that can be replaced later.
+5. The installed v0.1.5 Store app will see that latest.yml and may try to run the website installer. That is why step 4 waits. Customers who already installed the website copy by mistake have a second program. Their Store clips remain in the Store package profile, not in %APPDATA%\slipupclipz. Recovery is to keep using the Store app and uninstall the extra website copy, or to copy the Store profile only with both apps closed and with a backup. Do not tell them to uninstall the Store app first.
+6. Website customers who already use the NSIS installer update through electron-updater after latest.yml changes. Their profile stays %APPDATA%\slipupclipz.
+7. A customer who installs 0.1.6 months later still gets the Store package from the Store. The grace period stays open until you set LEGACY_DEVICE_GRACE_UNTIL to a time that has passed. Unset it to roll a bad cutoff back. Nothing in this rollout edits a production license or Stripe subscription.

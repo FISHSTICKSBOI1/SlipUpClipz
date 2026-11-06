@@ -1,24 +1,37 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { useAppVersion } from '../hooks/useAppVersion'
+import { Link, useLocation } from 'react-router-dom'
+import { readUpgradeFocus } from '@shared/upgradeNavigation'
 import { useAppSettings } from '../context/AppSettingsContext'
-import { useLicense } from '../context/LicenseContext'
 import { isElectronApp } from '../lib/electronBridge'
 import { playToggleSound } from '../lib/uiSounds'
+import { scrollLicenseSectionIntoView } from '../lib/upgradeScroll'
 import { AudioOutputSection } from '../components/settings/AudioOutputSection'
 import { HelpSupportSection } from '../components/settings/HelpSupportSection'
 import { SettingsSectionHeader } from '../components/settings/SettingsSectionHeader'
+import { AiRuntimeSection } from '../components/settings/AiRuntimeSection'
 import { UpdatesSection } from '../components/settings/UpdatesSection'
 import { LicenseSection } from '../components/license/LicenseSection'
-import { PaywallNotice } from '../components/license/PaywallNotice'
 
 export function SettingsPage() {
   const { settings, isLoading, updateSettings } = useAppSettings()
-  const { isPro } = useLicense()
-  const [appVersion, setAppVersion] = useState('0.1.0')
+  const appVersion = useAppVersion()
+  const upgradeFocus = readUpgradeFocus(useLocation().state)
+  const [licenseHighlight, setLicenseHighlight] = useState(false)
 
   useEffect(() => {
-    void window.electronAPI?.app.getVersion().then((info) => setAppVersion(info.version))
-  }, [])
+    if (isLoading || upgradeFocus == null) return
+    const section = document.getElementById('license')
+    if (!(section instanceof HTMLElement)) return
+    scrollLicenseSectionIntoView(section)
+    setLicenseHighlight(false)
+    const frame = window.requestAnimationFrame(() => setLicenseHighlight(true))
+    const timer = window.setTimeout(() => setLicenseHighlight(false), 1700)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [isLoading, upgradeFocus])
 
   useEffect(() => {
     if (isLoading) return
@@ -42,10 +55,6 @@ export function SettingsPage() {
       | 'globalHotkeysEnabled'
       | 'allowF11Fullscreen',
   ) {
-    if ((key === 'launchOnStartup' || key === 'globalHotkeysEnabled') && !isPro) {
-      return
-    }
-
     const nextValue = !settings[key]
     playToggleSound(nextValue)
     await updateSettings({ [key]: nextValue })
@@ -64,7 +73,9 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <LicenseSection />
+      <LicenseSection className={licenseHighlight ? 'upgrade-highlight' : ''} />
+
+      <AiRuntimeSection />
 
       <SettingsSection
         title="Clip Capture"
@@ -86,36 +97,21 @@ export function SettingsPage() {
       <AudioOutputSection />
 
       <SettingsSection title="Hotkeys" description="Control soundboard shortcut behavior.">
-        {isPro ? (
-          <ToggleRow
-            label="Global hotkeys"
-            description="Play assigned clips with keyboard shortcuts even when SlipUpClipz is in the background."
-            checked={settings.globalHotkeysEnabled}
-            onChange={() => void toggle('globalHotkeysEnabled')}
-          />
-        ) : (
-          <div className="py-4">
-            <PaywallNotice feature="globalHotkeys" />
-            <p className="mt-3 text-xs text-ink-muted">
-              Free plan still supports in-app hotkeys while SlipUpClipz is focused.
-            </p>
-          </div>
-        )}
+        <ToggleRow
+          label="Global hotkeys"
+          description="Play assigned clips with keyboard shortcuts even when SlipUpClipz is in the background."
+          checked={settings.globalHotkeysEnabled}
+          onChange={() => void toggle('globalHotkeysEnabled')}
+        />
       </SettingsSection>
 
       <SettingsSection title="Window" description="Control startup and window behavior.">
-        {isPro ? (
-          <ToggleRow
-            label="Launch on startup"
-            description="Open SlipUpClipz automatically when you sign in to Windows."
-            checked={settings.launchOnStartup}
-            onChange={() => void toggle('launchOnStartup')}
-          />
-        ) : (
-          <div className="py-4">
-            <PaywallNotice feature="autoStart" compact />
-          </div>
-        )}
+        <ToggleRow
+          label="Launch on startup"
+          description="Open SlipUpClipz automatically when you sign in to Windows."
+          checked={settings.launchOnStartup}
+          onChange={() => void toggle('launchOnStartup')}
+        />
         <ToggleRow
           label="Close to tray"
           description="Hide to the system tray when closing the window (X). Minimize always uses the Windows taskbar. Quit from the tray menu to exit fully."
@@ -155,7 +151,7 @@ export function SettingsPage() {
             <p className="text-sm font-medium text-white">Version</p>
             <p className="mt-1 text-xs text-ink-muted">SlipUpClipz desktop client</p>
           </div>
-          <span className="text-sm text-ink-soft">{appVersion}</span>
+          <span className="text-sm text-ink-soft">{appVersion ?? '…'}</span>
         </div>
         <div className="flex items-center justify-between py-4">
           <div>

@@ -25,6 +25,11 @@ export function isDevDemoLicenseKey(key: string): boolean {
   return match[3].toUpperCase() === checksum
 }
 
+/** Checksum demo keys are accepted only in unpackaged development builds. */
+export function shouldAcceptDevDemoKey(isPackaged: boolean, key: string): boolean {
+  return !isPackaged && isDevDemoLicenseKey(key)
+}
+
 /** Generates a development-only demo key. Never valid in packaged production builds. */
 export function generateDevDemoLicenseKey(part1 = 'PRO1', part2 = 'FULL'): string {
   const segments = `${part1}${part2}`.slice(0, 8).padEnd(8, '0')

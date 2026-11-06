@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CLIP_RECORD_HOTKEY, STOP_ALL_SOUNDS_HOTKEY } from '@shared/appTypes'
 import { formatHotkey, isModifierOnly } from '../../lib/hotkey'
+import { useModalScrim } from '../../hooks/useModalScrim'
 import type { Clip } from '../../types/clip'
 
 type HotkeyConflict = {
@@ -29,6 +31,7 @@ export function HotkeyDialog({
   onSave,
   onClose,
 }: HotkeyDialogProps) {
+  useModalScrim(0.6)
   const [captured, setCaptured] = useState(currentHotkey ?? '')
   const [confirmReplace, setConfirmReplace] = useState(false)
   const inputRef = useRef<HTMLButtonElement>(null)
@@ -81,8 +84,8 @@ export function HotkeyDialog({
     onSave(captured)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" data-hotkey-capture>
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" data-hotkey-capture>
       <div
         className="panel w-full max-w-md p-6 shadow-2xl"
         role="dialog"
@@ -139,6 +142,7 @@ export function HotkeyDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

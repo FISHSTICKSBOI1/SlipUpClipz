@@ -1,0 +1,8 @@
+SlipUpClipz 0.1.6
+
+- AI Voice Clip Cloning can be installed as an optional local component. The soundboard, hotkeys, and replay work without it.
+- An in-place update keeps the existing soundboard, clips, hotkeys, settings, and Pro license.
+- Microsoft Store installations update through the Store. They do not download the website installer.
+- Website installations continue to update from the signed GitHub release after that release is published.
+
+AI Voice Clip Cloning needs a supported NVIDIA GPU, about 15 GB of free disk space, and permission from the speaker. English is the tested language. Similarity to the original voice is not guaranteed.

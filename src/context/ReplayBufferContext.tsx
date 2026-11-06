@@ -7,7 +7,16 @@ import {
   type ReactNode,
 } from 'react'
 import { CLIP_RECORD_HOTKEY } from '@shared/appTypes'
+import {
+  pcmFromAudioBuffer,
+  TRIM_SAVE_UNVERIFIED_MESSAGE,
+  trimSaveOutcome,
+  verifyTrimSaveAudio,
+} from '../lib/audioTrim'
+import { decodeAudioBlob } from '../lib/waveform'
+import { requestRemoveSelectionAuthorization } from '../lib/removeSelectionAccess'
 import { useAppSettings } from './AppSettingsContext'
+import { canCaptureClip } from '@shared/replayCapture'
 import { useClipLibraryContext } from './ClipLibraryContext'
 import { useReplayBuffer } from '../hooks/useReplayBuffer'
 import { getAudioBlob } from '../lib/audioStorage'
@@ -27,10 +36,15 @@ type ReplayBufferContextValue = ReturnType<typeof useReplayBuffer> & {
   editingClip: EditingClip | null
   isSaving: boolean
   lastSavedName: string | null
+  saveError: string | null
   clipHotkey: string
   handleClip: () => Promise<void>
   openClipEditor: (clipId: string) => Promise<boolean>
-  handleSaveTrimmed: (trimmed: RecordingResult, name: string) => Promise<void>
+  handleSaveTrimmed: (
+    trimmed: RecordingResult,
+    name: string,
+    options?: { asNewClip?: boolean; startSec?: number; endSec?: number },
+  ) => Promise<void>
   handleCloseEditor: () => void
 }
 
@@ -47,9 +61,11 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
   const replay = useReplayBuffer({
     source: settings.replayAudioSource ?? 'microphone',
     virtualAudioInputDeviceId: settings.virtualAudioInputDeviceId,
+    audioInputDeviceId: settings.audioInputDeviceId,
   })
   const {
     isListening,
+    isTestingMic,
     clipBuffer,
     resetError,
     startListening,
@@ -58,6 +74,7 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
 
   const [isSaving, setIsSaving] = useState(false)
   const [lastSavedName, setLastSavedName] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [editingClip, setEditingClip] = useState<EditingClip | null>(null)
 
   /**
@@ -65,7 +82,7 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
    * Never shows, focuses, restores, or navigates the main window.
    */
   const handleClip = useCallback(async () => {
-    if (isSaving || !isListening) return
+    if (!canCaptureClip({ isListening, isSaving, isTestingMic })) return
 
     resetError()
     setLastSavedName(null)
@@ -105,7 +122,7 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
       // Sound + desktop overlay only — no editor, no navigation, no window show.
       notifyClipCaptured()
     }
-  }, [addClipFromRecording, clipBuffer, isListening, isSaving, resetError])
+  }, [addClipFromRecording, clipBuffer, isListening, isSaving, isTestingMic, resetError])
 
   const openClipEditor = useCallback(
     async (clipId: string): Promise<boolean> => {
@@ -115,6 +132,7 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
       const blob = await getAudioBlob(clipId)
       if (!blob) return false
 
+      setSaveError(null)
       setEditingClip({
         id: clip.id,
         name: clip.name,
@@ -126,14 +144,63 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
   )
 
   const handleSaveTrimmed = useCallback(
-    async (trimmed: RecordingResult, name: string) => {
+    async (
+      trimmed: RecordingResult,
+      name: string,
+      options?: { asNewClip?: boolean; startSec?: number; endSec?: number },
+    ) => {
       if (!editingClip) return
 
       const trimmedName = name.trim()
       if (!trimmedName) return
 
+      setSaveError(null)
+      const asNewClip = Boolean(options?.asNewClip)
+      const startSec = options?.startSec
+      const endSec = options?.endSec
+      const hasWindow = Number.isFinite(startSec) && Number.isFinite(endSec)
+      let verified = hasWindow
+        ? ({ ok: false } as ReturnType<typeof verifyTrimSaveAudio>)
+        : { ok: true as const, looksLikeRemoval: true }
+      if (hasWindow) {
+        try {
+          const [originalBuffer, savedBuffer] = await Promise.all([
+            decodeAudioBlob(editingClip.blob),
+            decodeAudioBlob(trimmed.blob),
+          ])
+          verified = verifyTrimSaveAudio({
+            original: pcmFromAudioBuffer(originalBuffer),
+            saved: pcmFromAudioBuffer(savedBuffer),
+            startSec,
+            endSec,
+          })
+        } catch {
+          verified = { ok: false }
+        }
+      }
+      if (!verified.ok) {
+        setSaveError(TRIM_SAVE_UNVERIFIED_MESSAGE)
+        return
+      }
+      const mainAllows =
+        asNewClip || verified.looksLikeRemoval ? await requestRemoveSelectionAuthorization() : false
+      const action = trimSaveOutcome({
+        verified,
+        asNewClip,
+        mainAllows,
+        originalId: editingClip.id,
+      })
+      if (action.action === 'unverified') {
+        setSaveError(TRIM_SAVE_UNVERIFIED_MESSAGE)
+        return
+      }
+      if (action.action === 'deny') return
+
       setIsSaving(true)
-      const clip = await replaceClipWithTrimmed(editingClip.id, trimmed, trimmedName)
+      const clip =
+        action.action === 'create'
+          ? await addClipFromRecording(trimmed, trimmedName)
+          : await replaceClipWithTrimmed(action.id, trimmed, trimmedName)
       setIsSaving(false)
 
       if (clip) {
@@ -141,10 +208,11 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
         setEditingClip(null)
       }
     },
-    [editingClip, replaceClipWithTrimmed],
+    [addClipFromRecording, editingClip, replaceClipWithTrimmed],
   )
 
   const handleCloseEditor = useCallback(() => {
+    setSaveError(null)
     setEditingClip(null)
   }, [])
 
@@ -179,6 +247,7 @@ export function ReplayBufferProvider({ children }: { children: ReactNode }) {
     editingClip,
     isSaving,
     lastSavedName,
+    saveError,
     clipHotkey: settings.clipHotkey || CLIP_RECORD_HOTKEY,
     handleClip,
     openClipEditor,

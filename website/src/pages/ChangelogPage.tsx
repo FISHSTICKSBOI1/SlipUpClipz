@@ -11,7 +11,7 @@ export function ChangelogPage() {
     <>
       <Seo
         title="Changelog — SlipUpClipz"
-        description="Release notes for SlipUpClipz on Windows, including updates, voice effects, and soundboard improvements."
+        description="Release notes for SlipUpClipz on Windows. v0.1.5 is the published download. v0.1.6 notes are a draft until that installer exists."
         path={SITE.paths.changelog}
       />
 
@@ -20,7 +20,7 @@ export function ChangelogPage() {
           <SectionHeading
             eyebrow="Changelog"
             title="What’s new in SlipUpClipz"
-            description="Release notes for the Windows app. Newest versions appear first."
+            description="The published Windows app is v0.1.5. v0.1.6 notes are a draft and that installer is not available yet."
           />
 
           <div className="relative mx-auto mt-12 max-w-3xl">
@@ -42,12 +42,18 @@ export function ChangelogPage() {
                       <h2 className="font-display text-xl font-bold text-white">
                         {entry.version}
                       </h2>
-                      <time
-                        dateTime={entry.date}
-                        className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500"
-                      >
-                        {formatDate(entry.date)}
-                      </time>
+                      {entry.status === 'upcoming' ? (
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-amber-200">
+                          Draft · not released
+                        </span>
+                      ) : (
+                        <time
+                          dateTime={entry.date}
+                          className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500"
+                        >
+                          {formatDate(entry.date)}
+                        </time>
+                      )}
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-300">{entry.title}</p>
                     <ul className="mt-4 space-y-2 text-sm leading-relaxed text-slate-400">

@@ -8,6 +8,7 @@ import {
   PlayIcon,
   ScissorsIcon,
   TrashIcon,
+  SparklesIcon,
 } from '../icons'
 
 type ClipCardProps = {
@@ -15,10 +16,11 @@ type ClipCardProps = {
   isPlaying: boolean
   onPlay: () => void
   onRename: (name: string) => void
-  onDelete: () => void
+  onDelete: (source: HTMLButtonElement) => void
   onAssignHotkey: () => void
   onExport: () => void
   onTrim: () => void
+  onAIClone: () => void
 }
 
 export function ClipCard({
@@ -30,6 +32,7 @@ export function ClipCard({
   onAssignHotkey,
   onExport,
   onTrim,
+  onAIClone,
 }: ClipCardProps) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [draftName, setDraftName] = useState(clip.name)
@@ -82,10 +85,12 @@ export function ClipCard({
               className="field-input !py-1.5"
             />
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-sm font-semibold text-white">{clip.name}</h3>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="min-w-0 truncate text-sm font-semibold text-white">{clip.name}</h3>
               {clip.isDraft ? (
                 <span className="badge-amber">Draft</span>
+              ) : clip.aiGenerated ? (
+                <span className="badge-accent">AI-generated</span>
               ) : clip.hasAudio ? (
                 <span className="badge-live">Recorded</span>
               ) : (
@@ -113,6 +118,9 @@ export function ClipCard({
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+        {canPlay && !clip.isDraft && !clip.aiGenerated && (
+          <ActionButton label="AI Clone" icon={SparklesIcon} onClick={onAIClone} />
+        )}
         {canPlay && (
           <ActionButton label="Trim" icon={ScissorsIcon} onClick={onTrim} />
         )}
@@ -121,7 +129,12 @@ export function ClipCard({
           <ActionButton label="Export" icon={ArrowDownTrayIcon} onClick={onExport} />
         )}
         <ActionButton label="Assign hotkey" icon={KeyboardIcon} onClick={onAssignHotkey} />
-        <ActionButton label="Delete" icon={TrashIcon} onClick={onDelete} variant="danger" />
+        <ActionButton
+          label="Delete"
+          icon={TrashIcon}
+          onClick={(event) => onDelete(event.currentTarget)}
+          variant="danger"
+        />
       </div>
     </article>
   )
@@ -135,7 +148,7 @@ function ActionButton({
 }: {
   label: string
   icon: typeof PencilIcon
-  onClick: () => void
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   variant?: 'default' | 'danger'
 }) {
   return (

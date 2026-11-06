@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { useModalScrim } from '../../hooks/useModalScrim'
 import type { Clip } from '../../types/clip'
 import { formatDuration } from '../../lib/format'
 
@@ -8,8 +10,9 @@ type ClipPickerDialogProps = {
 }
 
 export function ClipPickerDialog({ clips, onSelect, onClose }: ClipPickerDialogProps) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  useModalScrim(0.6)
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
       <div
         className="panel flex max-h-[80vh] w-full max-w-md flex-col shadow-2xl"
         role="dialog"
@@ -62,6 +65,7 @@ export function ClipPickerDialog({ clips, onSelect, onClose }: ClipPickerDialogP
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

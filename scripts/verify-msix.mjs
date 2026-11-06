@@ -75,16 +75,35 @@ try {
 
   const archMatch = manifest.match(/ProcessorArchitecture="([^"]+)"/)
   const versionMatch = manifest.match(/\bVersion="([^"]+)"/)
-  if (versionMatch?.[1] !== '1.0.5.0') {
-    fail(`Expected AppX Identity Version 1.0.5.0, found ${versionMatch?.[1] || 'missing'}`)
+  if (versionMatch?.[1] !== '1.0.6.0') {
+    fail(`Expected AppX Identity Version 1.0.6.0, found ${versionMatch?.[1] || 'missing'}`)
   }
   if (archMatch?.[1] !== 'x64') {
     fail(`Expected architecture x64, found ${archMatch?.[1] || 'missing'}`)
   }
 
   const publicVersion = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version
-  if (publicVersion !== '0.1.5') {
-    fail(`Expected public package.json version 0.1.5, found ${publicVersion}`)
+  if (publicVersion !== '0.1.6') {
+    fail(`Expected public package.json version 0.1.6, found ${publicVersion}`)
+  }
+
+  const { missingAiAppModulesFromDir } = require('../shared/aiAppResources.cjs')
+  const resourcesRoot = path.join(unpackDir, 'app', 'resources')
+  const missingAi = missingAiAppModulesFromDir(existsSync, path.join, resourcesRoot)
+  if (missingAi.length) {
+    fail(`app/resources/ai-app missing required modules: ${missingAi.join(', ')}`)
+  }
+  const bundledPython = path.join(unpackDir, 'app', 'resources', 'ai-runtime', 'python', 'python.exe')
+  const pinPath = path.join(unpackDir, 'app', 'resources', 'ai-component-pin.json')
+  if (existsSync(bundledPython)) {
+    fail('The base Store package contains python.exe. Free customers would have to download the voice engine.')
+  }
+  const pin = JSON.parse(readFileSync(pinPath, 'utf8'))
+  if (pin.url != null) {
+    fail('The Store package pin includes a download URL. Store builds must not download the executable archive.')
+  }
+  if (pin.model !== 'Qwen/Qwen3-TTS-12Hz-0.6B-Base') {
+    fail(`Unexpected model pin: ${pin.model}`)
   }
 
   console.log('[verify:msix] OK')
@@ -97,6 +116,9 @@ try {
   console.log(`  arch    : ${archMatch[1]}`)
   console.log(`  public package.json version (unchanged): ${publicVersion}`)
   console.log('  exe     : app/SlipUpClipz.exe present')
+  console.log('  ai app  : required Python modules present, voice-engine python.exe absent')
+  console.log('  pin url : null')
+  console.log('  note    : file inspection does not prove AI generation or a Store upgrade')
 } finally {
   rmSync(unpackDir, { recursive: true, force: true })
 }

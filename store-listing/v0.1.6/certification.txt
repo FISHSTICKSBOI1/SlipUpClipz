@@ -1,0 +1,38 @@
+Microsoft Store certification notes for v0.1.6
+
+Do not submit this package until the isolated upgrade test has passed.
+
+Identity, unchanged
+- Package name: SlipUpClipzLLC.SlipUpClipz
+- Publisher: CN=3B960933-E78C-4110-B2BE-9718E5AB5729
+- Publisher display name: SlipUpClipz LLC
+- Package family: SlipUpClipzLLC.SlipUpClipz_z6z50n1zy6nqj
+- Product ID: 9N89SSLR9769
+- Store package version: 1.0.6.0
+- Customer-facing version: 0.1.6
+
+This must be an update to the existing listing, not a new app. A different identity would install a second copy and would not keep the existing profile.
+
+Update behavior
+- This is an MSIX package delivered by Windows Update.
+- The app does not download the website NSIS installer.
+- The app does not download executable code after installation. Microsoft Store policy 10.2.2 does not allow that.
+- This base package does not contain the voice engine. resources\ai-runtime\python\python.exe is absent, and the packaged pin URL is null.
+- Free customers are not required to download the engine. A Store optional package is the compliant way to add it later, and that submission needs Partner Center permission which is not available. Do not tell certification that the engine is inside this package.
+- Website customers get a smaller NSIS installer and a separate checksum-verified component. Do not install that NSIS package over a Store installation.
+
+Capabilities already declared
+- runFullTrust
+- internetClient
+- microphone
+
+Reviewer notes
+- The soundboard works. Voice Cloning in this package reports that the Store package does not include a separate engine download. Generation cannot be reviewed in this package.
+- On a PC without a supported NVIDIA GPU, AI Voice Clip Cloning shows that a supported GPU and a current driver are required. The rest of the app stays usable.
+- Pro is one computer at a time. Development Pro is not available in a packaged build.
+- Existing clips and the Pro license live in the package's app data and must survive this in-place update.
+- Screenshots in this folder are the current website images for AI Voice Clip Cloning, the soundboard, and instant replay. Replace them if Partner Center needs captures from the certified build.
+
+Signing
+- Upload the unsigned AppX to the existing product. Partner Center signs accepted packages with the existing publisher identity. A separate commercial code-signing certificate is not required for this Store submission.
+- Do not sideload this AppX over the Store-signed 1.0.5.0 installation. That is not a valid in-place upgrade test.

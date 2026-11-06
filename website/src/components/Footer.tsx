@@ -20,6 +20,7 @@ const LEGAL = [
   { to: SITE.paths.privacy, label: 'Privacy Policy' },
   { to: SITE.paths.terms, label: 'Terms' },
   { to: SITE.paths.refund, label: 'Refund Policy' },
+  { to: SITE.paths.cookies, label: 'Cookie Policy' },
 ] as const
 
 export function Footer() {
@@ -54,7 +55,7 @@ export function Footer() {
             </a>
           </p>
           <p className="mt-5 text-xs text-slate-500">
-            Version {SITE.currentVersion} · Windows 10/11
+            Public download v{SITE.currentVersion} · Windows 10/11
           </p>
         </div>
 

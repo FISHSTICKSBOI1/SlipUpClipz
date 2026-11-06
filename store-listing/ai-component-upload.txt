@@ -1,0 +1,21 @@
+Website AI component upload
+
+Do not upload this file until you approve publication.
+
+File to upload, unchanged:
+D:\SlipUpClipzBuild\SlipUpClipz-AI-0.1.6.tar
+
+Size: 7,607,968,256 bytes
+SHA-256: 58eeb39d6a9057077a118f1dfd37f795cc483d32bce53ebd11d70618b029568b
+
+Destination:
+GitHub release tag v0.1.6
+Asset file name: SlipUpClipz-AI-0.1.6.tar
+
+After that asset exists and the downloaded bytes match the checksum above, set shared/aiComponentPin.json "url" to:
+
+https://github.com/FISHSTICKSBOI1/SlipUpClipz/releases/download/v0.1.6/SlipUpClipz-AI-0.1.6.tar
+
+Then rebuild the website NSIS installer. Leave "url" null until then. The app will not download a missing address.
+
+The Microsoft Store package does not use this URL. It carries the same runtime inside the MSIX.
