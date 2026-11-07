@@ -8,7 +8,8 @@ const ROWS = [
   { feature: 'Voice effects', free: 'Yes', pro: 'Yes' },
   { feature: 'Hear Myself', free: 'Yes', pro: 'Yes' },
   { feature: 'Minimize to tray', free: 'Yes', pro: 'Yes' },
-  { feature: 'AI Voice Clip Cloning', free: 'No', pro: 'Yes' },
+  { feature: 'Pro Cut', free: 'No', pro: 'Yes' },
+  { feature: 'AI Voice Clip Cloning', free: 'No', pro: 'Windows installer' },
 ] as const
 
 export function PlanComparison() {

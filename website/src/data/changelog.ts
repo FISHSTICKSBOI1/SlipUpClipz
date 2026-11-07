@@ -10,16 +10,16 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     version: '0.1.6',
-    date: '',
-    status: 'upcoming',
-    title: 'Draft notes for the next release — installer not published',
+    date: '2026-11-07',
+    status: 'released',
+    title: 'AI Voice Cloning on the Windows installer',
     highlights: [
-      'Not released yet. The public download is still v0.1.5.',
-      'Free keeps instant replay, trimming, the clip library, 7 soundboard pads, global hotkeys, VB-Cable routing, Start with Windows, voice effects, and Hear Myself.',
-      'Pro adds 50 soundboard pads and local English AI Voice Clip Cloning with Qwen3-TTS 0.6B.',
-      'Clone from a 0.8–7 second reference when the speaker has given permission.',
-      'Generate one clip, or three variations, then preview and save any combination.',
-      'Voice cloning runs locally and needs a compatible NVIDIA GPU. English is the tested language.',
+      'Free keeps instant replay, microphone and game recording, trimming, the clip library, 7 soundboard pads, global hotkeys, Discord and Valorant routing, voice effects, and Hear Myself.',
+      'Pro adds 50 soundboard pads, Pro Cut, and local AI Voice Clip Cloning on the Windows installer.',
+      'Generate one clip from a 0.8–7 second reference when the speaker has given permission, then use Generate Again and save it to your library.',
+      'The voice engine is a separate Pro install and needs a compatible NVIDIA GPU. English is the tested language.',
+      'If the voice engine fails, restart it from the dialog. Closing during generation asks before it stops.',
+      'A direct update from v0.1.5 keeps clips, settings, and Pro licenses. Microsoft Store installs update through the Store and do not use this installer.',
     ],
   },
   {

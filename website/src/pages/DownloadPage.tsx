@@ -25,7 +25,8 @@ export function DownloadPage() {
             Choose your download
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-400">
-            Both options give you the same core SlipUpClipz app and Pro license support.
+            Both options include the clipping and soundboard app. AI Voice Cloning is in the Windows
+            installer. The current Microsoft Store release does not include it.
           </p>
           <div className="mt-6 grid gap-5 md:grid-cols-2">
             <div className="panel flex flex-col p-6 sm:p-7">
@@ -55,7 +56,7 @@ export function DownloadPage() {
               <ul className="mt-4 flex-1 space-y-2 text-sm text-slate-400">
                 <li>Downloads the latest installer from SlipUpClipz.com / GitHub Releases</li>
                 <li>NSIS Setup (.exe) for Windows 10 / 11 (x64)</li>
-                <li>Same Pro license support as the Store version</li>
+                <li>v{SITE.currentVersion} includes Pro AI Voice Cloning and a separate voice-engine install</li>
               </ul>
               <div className="mt-6">
                 <Button href={SITE.downloadUrl} className="btn-lift w-full sm:w-auto">
@@ -68,14 +69,15 @@ export function DownloadPage() {
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="panel p-6 sm:p-8">
-            <p className="text-sm text-slate-400">Latest published direct download</p>
+            <p className="text-sm text-slate-400">Windows installer</p>
             <p className="mt-1 font-display text-3xl font-bold text-white">
               v{SITE.currentVersion}
             </p>
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
-              The download button follows the latest published GitHub release. That release is v{SITE.currentVersion}.
-              v{SITE.upcomingVersion} is the next planned release and its installer is not published,
-              so this page does not link to it. v{SITE.currentVersion} does not include AI Voice Clip Cloning.
+              The download button follows the latest published GitHub release. For this release that
+              file is SlipUpClipz Setup {SITE.currentVersion}. It includes AI Voice Cloning for Pro.
+              The voice engine is installed afterward from Settings and is not inside this installer.
+              The current Microsoft Store release does not include AI Voice Cloning.
             </p>
             <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
               <div>
@@ -130,8 +132,8 @@ export function DownloadPage() {
                 <li>Headphones recommended for monitoring</li>
                 <li>Optional: VB-Audio Virtual Cable for Discord routing</li>
                 <li>
-                  AI Voice Clip Cloning in v{SITE.upcomingVersion} needs a compatible NVIDIA GPU. Other
-                  graphics cards are not claimed as supported.
+                  AI Voice Clip Cloning needs a compatible NVIDIA GPU and a separate voice-engine
+                  download. Other graphics cards are not claimed as supported.
                 </li>
               </ul>
             </div>

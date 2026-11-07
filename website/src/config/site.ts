@@ -13,10 +13,9 @@ export const SITE = {
    */
   microsoftStoreUrl:
     'https://apps.microsoft.com/detail/9N89SSLR9769?hl=en-us&gl=US&ocid=pdpshare',
-  /** Latest published desktop installer. v0.1.6 is prepared on this site but not downloadable yet. */
-  currentVersion: '0.1.5',
-  upcomingVersion: '0.1.6',
-  installerSizeLabel: '~82.4 MB',
+  /** Windows installer prepared for the v0.1.6 website release. */
+  currentVersion: '0.1.6',
+  installerSizeLabel: '~83.6 MB',
   checkoutEndpoint: '/.netlify/functions/create-checkout',
   pricingQuoteEndpoint: '/.netlify/functions/pricing-quote',
   surveyEndpoint: '/.netlify/functions/submit-survey',

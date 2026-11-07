@@ -42,7 +42,7 @@ Do not publish automatically from this repo without reviewing placeholders first
 
 ## v0.1.6 local preview
 
-The public installer is still v0.1.5. Do not deploy this site, point downloads at a v0.1.6 file, or publish a release until that installer exists. `npm run website:dev` serves the preview at http://localhost:5174 and answers the survey and checkout functions locally. Download buttons still use `/.netlify/functions/download-latest`.
+The tested v0.1.6 Windows installer is staged locally. Publish the GitHub release, including the hyphenated installer, blockmap, and latest.yml, before deploying this site. Until that release exists, `/.netlify/functions/download-latest` still redirects to the public v0.1.5 installer. `npm run website:dev` serves the preview at http://localhost:5174.
 
 ## Survey feedback
 

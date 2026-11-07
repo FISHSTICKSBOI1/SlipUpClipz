@@ -17,8 +17,9 @@ export function AiVoicePanel({ heading = 'section' }: { heading?: 'section' | 'f
         </span>
       </div>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-400 sm:text-base">
-        Turn a short voice recording into new speech with AI. Preview your results and save them
-        to your soundboard.
+        Turn a short voice recording into one new clip. Preview it, use Generate Again, and save it
+        to your library. This is included with Pro on the Windows installer after you install the
+        local voice engine. The current Microsoft Store release does not include it.
       </p>
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)] lg:gap-8">
         <AiScreenshotGallery />

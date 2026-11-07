@@ -61,8 +61,9 @@ export function PricingCards() {
             ))}
           </ul>
           <p className="mt-4 text-sm leading-relaxed text-slate-400">
-            Pro includes local AI Voice Clip Cloning. English is the tested language, the speaker must
-            give permission, and a compatible NVIDIA GPU is required.
+            On the Windows installer, Pro includes local AI Voice Cloning. English is the tested
+            language, the speaker must give permission, and a compatible NVIDIA GPU is required. The
+            current Microsoft Store release does not include it.
           </p>
           <div className="mt-8">
             <ProCheckoutButton label={`Buy Pro — ${regular}/year`} />

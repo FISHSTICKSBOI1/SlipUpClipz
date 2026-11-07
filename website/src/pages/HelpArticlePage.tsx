@@ -77,15 +77,18 @@ export function HelpArticlePage() {
         </header>
 
         <div className="mt-8 max-w-3xl">
-          {article.omitScreenshot ? (
+          {article.slug === 'ai-voice' ? (
             <p className="panel px-5 py-4 text-sm leading-relaxed text-slate-300">
-              The walkthrough is on the{' '}
+              AI Voice Clip Cloning is included with Pro on the Windows installer for v
+              {SITE.currentVersion}. The current Microsoft Store release does not include it. Install
+              the voice engine from Settings after you activate Pro. The walkthrough screenshots are
+              on the{' '}
               <Link to={SITE.paths.features} className="text-glow-magenta hover:underline">
                 Features
               </Link>{' '}
-              page. The published v{SITE.currentVersion} app does not include this feature yet.
+              page.
             </p>
-          ) : (
+          ) : article.omitScreenshot ? null : (
             <ScreenshotFrame shot={shot} alt={`SlipUpClipz — ${article.screenshotLabel}`} />
           )}
         </div>

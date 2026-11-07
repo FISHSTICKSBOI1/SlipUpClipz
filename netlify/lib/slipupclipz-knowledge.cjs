@@ -34,11 +34,13 @@ const FREE_FEATURES = [
 const PRO_FEATURES = [
   'Everything in Free',
   '50 soundboard pads',
-  'Local English AI Voice Clip Cloning using Qwen3-TTS 0.6B, planned for desktop v0.1.6',
+  'Pro Cut',
+  'Local AI Voice Clip Cloning on the v0.1.6 Windows installer',
   'Voice cloning from a 0.8–7 second reference when the speaker has given permission',
-  'One generated clip, or three variations that can be previewed and saved in any combination',
-  'AI Voice Clip Cloning is not in the published v0.1.5 installer',
-  'Cloning runs on the computer and needs a compatible NVIDIA GPU. Do not claim it works on every GPU, matches the speaker perfectly, or has no performance cost.',
+  'Generate one clip, preview it, save it, and use Generate Again to repeat that request',
+  'The voice engine is a separate Pro download from Settings and needs a compatible NVIDIA GPU',
+  'The current Microsoft Store release does not include AI Voice Cloning',
+  'Do not claim cloning works on every GPU, matches the speaker perfectly, or has no performance cost',
   'English is the only language tested well enough to advertise',
 ]
 
@@ -84,8 +86,8 @@ const INSTALL_UPDATES = [
   'SlipUpClipz is Windows only. There is no macOS or mobile app.',
   'Download the installer from slipupclipz.com (Download for Windows).',
   'Windows security prompts (SmartScreen) can appear for new apps. Choose More info → Run anyway only if you trust the official SlipUpClipz download source.',
-  'The last published desktop release is v0.1.5. v0.1.6 is the next planned release and its installer is not published yet.',
-  'Do not tell a customer that AI Voice Clip Cloning is already in the app they downloaded if they are on v0.1.5.',
+  'The Windows installer for this release is v0.1.6. A direct update from v0.1.5 keeps clips, settings, and Pro licenses.',
+  'AI Voice Cloning is in the v0.1.6 Windows installer. The current Microsoft Store release does not include it. Do not tell a Store customer that the Store app can generate AI voices.',
   'The app includes an auto-updater.',
   'If updating fails: close and reopen the app, then download the newest installer from the website if needed.',
 ]

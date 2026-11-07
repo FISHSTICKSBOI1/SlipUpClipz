@@ -4,11 +4,10 @@ export const FEATURE_SECTIONS = [
     kind: 'ai' as const,
     title: 'AI Voice Clip Cloning',
     points: [
-      'Generate new English speech from a recording of a speaker who gave permission',
-      'Generate one clip, or three variations',
-      'Preview each variation and save the ones you select',
-      'Send generated clips to the soundboard',
-      'Runs locally with Qwen3-TTS 0.6B on a compatible NVIDIA GPU',
+      'Create new English speech from a short recording when that speaker has given permission',
+      'Generate one clip at a time, then use Generate Again to repeat it',
+      'Preview the result and save it to your clip library',
+      'Install the voice engine separately from Settings. It is Pro only and needs a compatible NVIDIA GPU',
     ],
   },
   {
@@ -16,7 +15,7 @@ export const FEATURE_SECTIONS = [
     kind: 'screenshot' as const,
     title: 'Instant replay clipping',
     points: [
-      'Keep the last few seconds of mic, Discord, or game audio ready',
+      'Keep the last few seconds of microphone, Discord, or game audio ready',
       'Press one hotkey the moment something funny happens',
       'Capture without stopping your match',
     ],
@@ -29,8 +28,8 @@ export const FEATURE_SECTIONS = [
     title: 'Waveform trimming',
     points: [
       'See the clip as a clear waveform',
-      'Drag start and end points, then preview before saving',
-      'Keep only the punchline',
+      'Drag the start and end, then preview before saving',
+      'Pro Cut removes a middle section and can save that edit as a new clip',
     ],
     imageKey: 'trim' as const,
     imageAlt: 'SlipUpClipz trim editor with waveform selection handles',
@@ -53,7 +52,7 @@ export const FEATURE_SECTIONS = [
     title: 'Virtual microphone routing',
     points: [
       'Mix your live mic and soundboard into one output',
-      'Send that mix to Discord or supported game voice chats',
+      'Send that mix to Discord, Valorant, or another voice chat that can use a virtual microphone',
       'VB-Audio Virtual Cable routing is included on the Free plan',
     ],
     imageKey: 'settings' as const,
@@ -117,7 +116,8 @@ export const FREE_PLAN_FEATURES = [
 export const PRO_PLAN_FEATURES = [
   'Everything in Free',
   '50 soundboard pads',
-  'Local AI Voice Clip Cloning with Qwen3-TTS 0.6B',
-  '0.8–7 second English reference clips',
-  'One generation, or three variations you can preview and save',
+  'Pro Cut',
+  'Local AI Voice Clip Cloning on the Windows installer',
+  'Generate Again, then save the clip to your library',
+  'Separate local voice-engine install',
 ] as const

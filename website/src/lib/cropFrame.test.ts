@@ -15,13 +15,14 @@ describe('cropFrameStyle', () => {
     assert.ok(Number.parseFloat(frame.image.height) > 100)
   })
 
-  it('frames every AI screenshot as the same 16:9 landscape crop', () => {
-    const [first, ...rest] = AI_VOICE_SHOTS
-    assert.equal(first.crop.width * 9, first.crop.height * 16)
-    for (const shot of rest) {
-      assert.equal(shot.crop.width, first.crop.width)
-      assert.equal(shot.crop.height, first.crop.height)
-      assert.ok(shot.crop.x >= 320)
+  it('keeps every AI screenshot inside its own 16:9 frame', () => {
+    for (const shot of AI_VOICE_SHOTS) {
+      assert.equal(shot.crop.width * 9, shot.crop.height * 16)
+      assert.ok(shot.crop.x >= 0)
+      assert.ok(shot.crop.y >= 0)
+      assert.ok(shot.crop.x + shot.crop.width <= shot.imageWidth)
+      assert.ok(shot.crop.y + shot.crop.height <= shot.imageHeight)
+      assert.doesNotMatch(shot.alt, /three variations/i)
     }
   })
 })

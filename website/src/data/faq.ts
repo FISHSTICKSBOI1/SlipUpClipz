@@ -4,7 +4,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'Where can I download SlipUpClipz?',
     answer:
-      'You can install SlipUpClipz through the Microsoft Store or download the latest Windows installer directly from SlipUpClipz.com. Both versions provide the same core app and Pro license support.',
+      'You can install SlipUpClipz from the Microsoft Store or download the Windows installer from SlipUpClipz.com. Both include the clipping and soundboard app, and a website Pro license can be activated in either one. AI Voice Cloning is in the v0.1.6 Windows installer. The current Microsoft Store release does not include it.',
   },
   {
     question: 'What does SlipUpClipz record?',
@@ -54,17 +54,17 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'What is included in Free and Pro?',
     answer:
-      'Free includes instant replay clipping, recording, trimming, the clip library, 7 soundboard pads, global hotkeys, VB-Audio Virtual Cable routing, Start with Windows, voice effects, and Hear Myself. Pro includes everything in Free, plus 50 soundboard pads and local AI Voice Clip Cloning. AI Voice Clip Cloning ships with desktop v0.1.6. The published v0.1.5 download does not include it.',
+      'Free includes instant replay clipping, microphone and game recording, trimming, the clip library, 7 soundboard pads, global hotkeys, VB-Audio Virtual Cable routing, Start with Windows, voice effects, and Hear Myself. Pro includes everything in Free, plus 50 soundboard pads, Pro Cut, and local AI Voice Clip Cloning on the Windows installer.',
   },
   {
     question: 'How does AI Voice Clip Cloning work?',
     answer:
-      'Pro in v0.1.6 can clone a voice locally with Qwen3-TTS 0.6B from a 0.8–7 second reference. English is the language we have tested. The speaker has to give permission. You can generate one clip, or three variations, then preview and save any combination. It needs a compatible NVIDIA GPU. It does not work on every graphics card, it does not guarantee the result will sound like the speaker, and generating a clip uses the GPU while it runs.',
+      'On the Windows installer, Pro can create new English speech from a 0.8–7 second recording when that speaker has given permission. You generate one clip, preview it, and save it to your library. Generate Again repeats that same request. The voice engine is a separate Pro download and needs a compatible NVIDIA GPU. It does not work on every graphics card, it does not guarantee the result will sound like the speaker, and generating uses the GPU while it runs. If the engine fails, the dialog can restart it. Closing the dialog during generation asks before it stops.',
   },
   {
     question: 'Will it affect game performance?',
     answer:
-      'Clipping and the soundboard are built to stay light while you play, and SlipUpClipz does not record video. AI Voice Clip Cloning is different: it loads a local model on a compatible NVIDIA GPU and uses that GPU while generating. The model is not a zero-cost background feature. Close unused audio apps if you notice contention.',
+      'Clipping and the soundboard are built to stay light while you play, and SlipUpClipz does not record video. AI Voice Clip Cloning is different: it loads a local voice engine on a compatible NVIDIA GPU and uses that GPU while generating. That engine is not a zero-cost background feature. Close unused audio apps if you notice contention.',
   },
   {
     question: 'Is Pro a subscription?',

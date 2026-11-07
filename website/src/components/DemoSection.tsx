@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from './Button'
+import { MicrosoftStoreButton } from './MicrosoftStoreButton'
 import { SITE } from '../config/site'
 
 const DEMO_OPEN_EVENT = 'slipupclipz:open-demo'
@@ -118,8 +119,9 @@ export function DemoSection() {
           </div>
         </dialog>
 
-        <div className="mt-8 flex justify-center">
-          <Button href={SITE.downloadUrl} className="btn-lift">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <MicrosoftStoreButton variant="primary" />
+          <Button href={SITE.downloadUrl} variant="secondary" className="btn-lift">
             Download for Windows
           </Button>
         </div>

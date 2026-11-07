@@ -42,7 +42,7 @@ export function HomePage() {
               <span>AI Voice Clip Cloning</span>
               <span aria-hidden>→</span>
             </button>
-            <p className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
+            <p className="max-w-full font-display text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
               SlipUpClipz
             </p>
             <h1 className="mt-6 max-w-xl font-display text-3xl font-bold leading-tight text-slate-50 sm:text-4xl">
@@ -51,14 +51,15 @@ export function HomePage() {
             <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
               SlipUpClipz captures the last few seconds of game, Discord, or microphone audio, lets
               you trim the best part, and replay it instantly through your soundboard. Free includes
-              7 pads, global hotkeys, and virtual-cable routing. Pro adds 50 pads and local AI Voice
-              Cloning.
+              7 pads, global hotkeys, and virtual-cable routing. Pro adds 50 pads. The Windows
+              installer also adds local AI Voice Cloning. The current Microsoft Store release does
+              not include AI Voice Cloning.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <Button href={SITE.downloadUrl} className="btn-lift w-full sm:w-auto">
+              <MicrosoftStoreButton variant="primary" className="w-full sm:w-auto" />
+              <Button href={SITE.downloadUrl} variant="secondary" className="btn-lift w-full sm:w-auto">
                 Download for Windows
               </Button>
-              <MicrosoftStoreButton className="w-full sm:w-auto" />
               <Button
                 type="button"
                 variant="secondary"

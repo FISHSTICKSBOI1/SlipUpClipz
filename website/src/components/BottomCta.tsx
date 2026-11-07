@@ -1,4 +1,5 @@
 import { Button } from './Button'
+import { MicrosoftStoreButton } from './MicrosoftStoreButton'
 import { SITE } from '../config/site'
 
 export function BottomCta() {
@@ -11,10 +12,12 @@ export function BottomCta() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-sm text-slate-300 sm:text-base">
             Download SlipUpClipz for Windows. Start free, or upgrade to Pro for $4.99/year. The
-            public installer is v{SITE.currentVersion}.
+            Windows installer is v{SITE.currentVersion}. The current Microsoft Store release does not
+            include AI Voice Cloning.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Button href={SITE.downloadUrl} className="btn-lift">
+            <MicrosoftStoreButton variant="primary" />
+            <Button href={SITE.downloadUrl} variant="secondary" className="btn-lift">
               Download for Windows
             </Button>
             <Button to={SITE.paths.pricing} variant="secondary" className="btn-lift">

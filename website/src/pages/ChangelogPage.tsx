@@ -11,7 +11,7 @@ export function ChangelogPage() {
     <>
       <Seo
         title="Changelog — SlipUpClipz"
-        description="Release notes for SlipUpClipz on Windows. v0.1.5 is the published download. v0.1.6 notes are a draft until that installer exists."
+        description="Release notes for SlipUpClipz on Windows. v0.1.6 is the Windows installer. The current Microsoft Store release does not include AI Voice Cloning."
         path={SITE.paths.changelog}
       />
 
@@ -20,7 +20,7 @@ export function ChangelogPage() {
           <SectionHeading
             eyebrow="Changelog"
             title="What’s new in SlipUpClipz"
-            description="The published Windows app is v0.1.5. v0.1.6 notes are a draft and that installer is not available yet."
+            description="v0.1.6 is the Windows installer. Microsoft Store installs update separately and the current Store release does not include AI Voice Cloning."
           />
 
           <div className="relative mx-auto mt-12 max-w-3xl">

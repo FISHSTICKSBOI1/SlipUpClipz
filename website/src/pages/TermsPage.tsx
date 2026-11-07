@@ -25,8 +25,9 @@ export function TermsPage() {
           SlipUpClipz gives you a personal, non-exclusive license to install and use the Windows
           app. Free includes the clipping and soundboard features described on the pricing page,
           including 7 pads. Pro is an annual subscription that adds the Pro features in effect at
-          the time, including 50 pads. AI Voice Clip Cloning is planned for Pro in v{SITE.upcomingVersion}.
-          It is not in the public v{SITE.currentVersion} download.
+          the time, including 50 pads and Pro Cut. AI Voice Clip Cloning is included with Pro on the
+          Windows installer for v{SITE.currentVersion}. The current Microsoft Store release does not
+          include AI Voice Cloning.
         </p>
         <p>
           You may not resell the installer, present it as your own product, or share a Pro license
