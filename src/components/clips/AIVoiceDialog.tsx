@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MAX_REFERENCE_TEXT_CHARS, referenceDurationMsAllowed } from '@shared/aiReference'
+import { aiRecoveryAction } from '@shared/aiRecovery'
 import { customerAiMessage } from '@shared/customerAiMessage'
+import { acceptGenerationResult, aiCloseAction } from '../../lib/aiDialogClose'
 import { inspectReferencePcm, transcriptAccuracyWarning, type ReferenceWarning } from '@shared/referenceCheck'
 import { GenerationProgress } from './GenerationProgress'
 import { type GenerationPhase } from '@shared/generationProgress'
@@ -56,6 +58,8 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmStop, setConfirmStop] = useState(false)
+  const [restarting, setRestarting] = useState(false)
   const [takes, setTakes] = useState<GeneratedTake[]>([])
   const previewPlayers = useRef<Set<HTMLAudioElement>>(new Set())
   const generationSnapshot = useRef<GenerationRequestSnapshot | null>(null)
@@ -76,6 +80,7 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
   const [progressNow, setProgressNow] = useState(0)
   const generationAlive = useRef(true)
   const generationLock = useRef(false)
+  const cancelledRequest = useRef('')
   const generationSeq = useRef(0)
   const [transcriptStatus, setTranscriptStatus] = useState<TranscriptStatus>('idle')
   const [seenClipId, setSeenClipId] = useState(clip.id)
@@ -99,13 +104,27 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || busy || saving || job) return
+      if (event.key !== 'Escape' || confirmStop) return
       event.preventDefault()
-      onClose()
+      const action = aiCloseAction({ generating: busy || job !== null, confirmOpen: false, choice: 'escape' })
+      if (action === 'ask') setConfirmStop(true)
+      else if (action === 'close') onClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [busy, job, onClose, saving])
+  }, [busy, confirmStop, job, onClose])
+
+  useEffect(() => {
+    if (!confirmStop) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setConfirmStop(false)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [confirmStop])
 
   if (seenClipId !== clip.id) {
     setSeenClipId(clip.id)
@@ -119,6 +138,7 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
     savedNames.current = new Set()
     setCanRepeat(false)
     setJob(null)
+    setConfirmStop(false)
     setReferenceWarnings([])
     setError('')
     setTranscriptStatus('idle')
@@ -278,6 +298,7 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
       if (!source) throw new Error('The selected clip has no saved audio.')
       const referenceSource = new Uint8Array(await source.arrayBuffer())
       const wav = await audioClipToWav(new Blob([referenceSource], { type: source.type || 'audio/wav' }))
+      if (cancelledRequest.current === requestId) return
       const result = await window.electronAPI.ai.generate({
         audioWav: wav,
         refText,
@@ -287,7 +308,12 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
         consent: true,
         requestId,
       })
-      if (!generationAlive.current || activeClipId.current !== clipId) return
+      if (!acceptGenerationResult({
+        requestId,
+        cancelledRequestId: cancelledRequest.current,
+        dialogOpen: generationAlive.current,
+        clipMatches: activeClipId.current === clipId,
+      })) return
       const outputBytes = new Uint8Array(result.length)
       outputBytes.set(result)
       generationSnapshot.current = captureGenerationRequest({
@@ -302,11 +328,16 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
       setCanRepeat(true)
       rememberTake(outputBytes)
     } catch (caught) {
-      if (!generationAlive.current || activeClipId.current !== clipId) return
+      if (!acceptGenerationResult({
+        requestId,
+        cancelledRequestId: cancelledRequest.current,
+        dialogOpen: generationAlive.current,
+        clipMatches: activeClipId.current === clipId,
+      })) return
       reportAiError(caught, 'Voice generation failed.')
     } finally {
       generationLock.current = false
-      if (generationAlive.current) {
+      if (generationAlive.current && cancelledRequest.current !== requestId) {
         setJob(null)
         setBusy(false)
       }
@@ -325,6 +356,7 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
       const currentSource = source ? new Uint8Array(await source.arrayBuffer()) : null
       const again = generationAgainRequest(snapshot, currentSource)
       if (!again.ok) throw new Error(again.error)
+      if (cancelledRequest.current === requestId) return
       const result = await window.electronAPI.ai.generate({
         audioWav: again.audioWav,
         refText: again.refText,
@@ -334,16 +366,26 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
         consent: true,
         requestId,
       })
-      if (!generationAlive.current || activeClipId.current !== snapshot.clipId) return
+      if (!acceptGenerationResult({
+        requestId,
+        cancelledRequestId: cancelledRequest.current,
+        dialogOpen: generationAlive.current,
+        clipMatches: activeClipId.current === snapshot.clipId,
+      })) return
       const outputBytes = new Uint8Array(result.length)
       outputBytes.set(result)
       rememberTake(outputBytes)
     } catch (caught) {
-      if (!generationAlive.current || activeClipId.current !== snapshot.clipId) return
+      if (!acceptGenerationResult({
+        requestId,
+        cancelledRequestId: cancelledRequest.current,
+        dialogOpen: generationAlive.current,
+        clipMatches: activeClipId.current === snapshot.clipId,
+      })) return
       reportAiError(caught, 'Voice generation failed.')
     } finally {
       generationLock.current = false
-      if (generationAlive.current) {
+      if (generationAlive.current && cancelledRequest.current !== requestId) {
         setJob(null)
         setBusy(false)
       }
@@ -390,8 +432,67 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
     }
   }, [])
 
-  const generationBusy = busy || saving || job !== null
+  const generating = busy || job !== null
+  const generationBusy = generating || saving
   const canGenerateAgain = canRepeat && permission && available === true && !generationBusy
+  const recovery = error && !generating ? aiRecoveryAction(error) : 'none'
+
+  function requestClose() {
+    const action = aiCloseAction({ generating, confirmOpen: confirmStop, choice: 'close' })
+    if (action === 'ask') setConfirmStop(true)
+    else if (action === 'close') onClose()
+  }
+
+  async function handleRestartEngine() {
+    if (restarting || !window.electronAPI?.ai.restart) return
+    setRestarting(true)
+    try {
+      const result = await window.electronAPI.ai.restart()
+      if (result.ok) {
+        setError('')
+        setAvailable(true)
+        setHealthMessage('')
+        return
+      }
+      reportAiError(new Error(result.message), 'The AI engine could not be restarted.')
+    } catch (caught) {
+      reportAiError(caught, 'The AI engine could not be restarted.')
+    } finally {
+      setRestarting(false)
+    }
+  }
+
+  async function stopAndClose() {
+    const requestId = job?.requestId ?? ''
+    if (requestId) cancelledRequest.current = requestId
+    const cancel = window.electronAPI?.ai.cancel
+    if (generating && !cancel) {
+      setConfirmStop(false)
+      reportAiError(new Error('AI Clone could not stop the current generation.'), 'AI Clone could not stop the current generation.')
+      return
+    }
+    try {
+      if (cancel && requestId) {
+        const result = await cancel({ requestId, sessionId: generationSessionId.current })
+        if (!result.stopped) {
+          cancelledRequest.current = ''
+          setConfirmStop(false)
+          reportAiError(new Error(result.message || 'Another program is using the local AI port. SlipUpClipz will not stop that program.'), 'AI Clone could not stop the current generation.')
+          return
+        }
+      }
+    } catch (caught) {
+      cancelledRequest.current = ''
+      setConfirmStop(false)
+      reportAiError(caught, 'AI Clone could not stop the current generation.')
+      return
+    }
+    generationLock.current = false
+    setJob(null)
+    setBusy(false)
+    setConfirmStop(false)
+    onClose()
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4">
@@ -401,7 +502,7 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
             <h2 id="ai-voice-title" className="text-lg font-semibold text-white">AI Voice Clone</h2>
             <p className="mt-1 break-words text-sm text-gray-400">Reference: {clip.name} ({(clip.durationMs / 1000).toFixed(1)} sec)</p>
           </div>
-          <button type="button" onClick={onClose} disabled={generationBusy} className="shrink-0 text-sm text-gray-400 hover:text-white disabled:opacity-40">Close</button>
+          <button type="button" onClick={requestClose} className="shrink-0 text-sm text-gray-400 hover:text-white">Close</button>
         </div>
 
         <div className="mt-5 space-y-4">
@@ -461,7 +562,16 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
             <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-accent" checked={permission} onChange={(event) => setPermission(event.target.checked)} />
             <span>I have permission from the speaker to create synthetic speech using this recording. I'll label it as AI and won't use it to impersonate or mislead anyone.</span>
           </label>
-          {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
+          {error && (
+            <div role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+              <p>{error}</p>
+              {recovery === 'restart-engine' && (
+                <button type="button" className="btn-secondary mt-3" disabled={restarting} onClick={() => void handleRestartEngine()}>
+                  {restarting ? 'Restarting AI Engine…' : 'Restart AI Engine'}
+                </button>
+              )}
+            </div>
+          )}
           {job && (
             <GenerationProgress
               phase={job.phase}
@@ -503,6 +613,20 @@ export function AIVoiceDialog({ clip, existingNames, onClose, onSave }: AIVoiceD
           )}
         </div>
       </section>
+      {confirmStop && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
+          <div className="panel w-full max-w-sm p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="stop-generating-title" aria-describedby="stop-generating-message">
+            <h2 id="stop-generating-title" className="text-base font-semibold text-white">Stop generating?</h2>
+            <p id="stop-generating-message" className="mt-2 text-sm leading-relaxed text-gray-400">
+              Closing AI Voice Clone will stop your current generation. Unsaved previews may be lost.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setConfirmStop(false)}>Keep Generating</button>
+              <button type="button" className="btn-danger" onClick={() => void stopAndClose()}>Stop &amp; Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   )

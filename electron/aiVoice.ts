@@ -1,8 +1,8 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { MAX_REFERENCE_TEXT_CHARS, MAX_WAV_BYTES } from '../shared/aiReference.js'
 import { requiresProLicense } from '../shared/appTypes.js'
-import { type AiWorkerController, type WorkerSession } from './aiWorkerControl.js'
-import { getAiWorker } from './aiWorker.js'
+import { AI_GENERATION_STOPPED, PORT_IN_USE_MESSAGE, removeOwnedSessionTemps, type AiWorkerController, type WorkerSession } from './aiWorkerControl.js'
+import { getAiOutputDirectory, getAiWorker } from './aiWorker.js'
 import { isProLicense } from './license.js'
 import { getLicense } from './store.js'
 
@@ -79,7 +79,17 @@ function worker(): AiWorkerController {
   return getAiWorker()
 }
 
-async function postAi(session: WorkerSession, pathname: string, form: FormData, timeoutMs: number): Promise<Response> {
+const activeGenerations = new Map<string, AbortController>()
+
+async function postAi(
+  session: WorkerSession,
+  pathname: string,
+  form: FormData,
+  timeoutMs: number,
+  cancel?: AbortSignal,
+): Promise<Response> {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  const signal = cancel ? AbortSignal.any([timeout, cancel]) : timeout
   try {
     return await fetch(`${session.url}${pathname}`, {
       method: 'POST',
@@ -88,9 +98,10 @@ async function postAi(session: WorkerSession, pathname: string, form: FormData, 
         'X-SlipUpClipz-Worker': session.token,
       },
       body: form,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
     })
   } catch (error) {
+    if (cancel?.aborted) throw new Error(AI_GENERATION_STOPPED)
     const name = error instanceof Error ? error.name : ''
     const timedOut = name === 'TimeoutError' || name === 'AbortError'
     console.error(timedOut ? '[ai] connection failure: timed out' : '[ai] connection failure', error)
@@ -117,6 +128,26 @@ export function registerAiVoiceIpc(getMainWindow: () => BrowserWindow | null): v
   ipcMain.handle('ai:health', async (event) => {
     ensureSource(event, getMainWindow)
     return worker().health()
+  })
+
+  ipcMain.handle('ai:restart', async (event) => {
+    ensureSource(event, getMainWindow)
+    ensureAiEntitlement()
+    return worker().restartOwnedEngine()
+  })
+
+  ipcMain.handle('ai:cancel', async (event, input: { requestId?: string; sessionId?: string }) => {
+    ensureSource(event, getMainWindow)
+    const requestId = generationRequestId(input?.requestId)
+    activeGenerations.get(requestId)?.abort()
+    const outcome = await worker().cancelOwnedGeneration()
+    if (outcome !== 'foreign') {
+      const sessionId = generationSessionId(input?.sessionId)
+      if (sessionId) removeOwnedSessionTemps(getAiOutputDirectory(), sessionId)
+    }
+    return outcome === 'foreign'
+      ? { stopped: false, message: PORT_IN_USE_MESSAGE }
+      : { stopped: true }
   })
 
   ipcMain.handle('ai:transcribe', async (event, input: TranscribeInput): Promise<TranscribeResult> => {
@@ -161,16 +192,26 @@ export function registerAiVoiceIpc(getMainWindow: () => BrowserWindow | null): v
     if (input.temporary !== false) form.append('temporary', '1')
 
     const requestId = generationRequestId(input?.requestId)
-    const response = await worker().run(
-      input?.consent === true,
-      (session) => {
-        publishGenerationStage(getMainWindow, requestId, 'generating')
-        return postAi(session, '/generate-from-clip', form, 180000)
-      },
-      {
-        onLoading: () => publishGenerationStage(getMainWindow, requestId, 'loading'),
-      },
-    )
+    const abort = new AbortController()
+    if (requestId) activeGenerations.set(requestId, abort)
+    let response: Response
+    try {
+      response = await worker().run(
+        input?.consent === true,
+        (session) => {
+          if (abort.signal.aborted) throw new Error(AI_GENERATION_STOPPED)
+          publishGenerationStage(getMainWindow, requestId, 'generating')
+          return postAi(session, '/generate-from-clip', form, 180000, abort.signal)
+        },
+        {
+          onLoading: () => publishGenerationStage(getMainWindow, requestId, 'loading'),
+        },
+      )
+    } finally {
+      if (requestId) activeGenerations.delete(requestId)
+    }
+
+    if (abort.signal.aborted) throw new Error(AI_GENERATION_STOPPED)
 
     if (!response.ok) {
       throw new Error(await readAiError(response, `AI server returned HTTP ${response.status}.`))

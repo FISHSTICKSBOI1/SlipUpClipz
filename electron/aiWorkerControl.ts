@@ -1,8 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
+
+const SESSION_TEMP_WAV = /^tmp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9a-f]{32}\.wav$/i
 
 export const AI_SERVER_URL = 'http://127.0.0.1:8765'
 export const DEFAULT_IDLE_MS = 120_000
@@ -12,6 +14,11 @@ export const REUSE_PROBE_MS = 20_000
 export const AI_WORKER_CLAIM = 'ai-worker.claim'
 export const PORT_IN_USE_MESSAGE =
   'Another program is using the local AI port. SlipUpClipz will not send your recording there and will not stop that program.'
+export const AI_GENERATION_STOPPED = 'AI Clone generation was stopped.'
+
+export type EngineRestartResult =
+  | { ok: true }
+  | { ok: false; code: 'busy' | 'foreign' | 'failed'; message: string }
 const PRODUCTION_MODEL = 'Qwen3-TTS-0.6B'
 const READY_LINE = 'Uvicorn running on http://127.0.0.1:8765'
 
@@ -127,6 +134,38 @@ export function resolveAiRuntime(appRoot: string, options: AiRuntimeOptions = {}
   ].filter((candidate): candidate is string => Boolean(candidate))
   const pythonPath = candidates.find((candidate) => existsSync(candidate)) ?? candidates[0] ?? ''
   return runtimeFrom('development', pythonPath, aiDir, '', logDir)
+}
+
+export function aiOutputDirectoryFor(runtime: Pick<AiRuntime, 'source' | 'aiDir' | 'logDir'>): string {
+  if (runtime.source !== 'development' && runtime.logDir) {
+    return path.join(path.dirname(runtime.logDir), 'outputs')
+  }
+  return path.join(runtime.aiDir, 'outputs')
+}
+
+/** Delete only this session's tmp WAVs. Reference recordings and other sessions stay. */
+export function removeOwnedSessionTemps(outputDir: string, sessionId: string): string[] {
+  if (!outputDir || !sessionId || !existsSync(outputDir)) return []
+  const root = path.resolve(outputDir)
+  const removed: string[] = []
+  let names: string[] = []
+  try {
+    names = readdirSync(root)
+  } catch {
+    return removed
+  }
+  for (const name of names) {
+    if (!SESSION_TEMP_WAV.test(name) || !name.toLowerCase().startsWith(`tmp-${sessionId.toLowerCase()}-`)) continue
+    const full = path.resolve(root, name)
+    if (path.dirname(full) !== root) continue
+    try {
+      unlinkSync(full)
+      removed.push(name)
+    } catch {
+      // A file still open in the worker is left for the later orphan scan.
+    }
+  }
+  return removed
 }
 
 export function localPortBusy(port = 8765): Promise<boolean> {
@@ -353,6 +392,7 @@ export class AiWorkerController {
   private idleEpoch = 0
   private recent: string[] = []
   private loadingNotice: (() => void) | undefined
+  private cancellation = 0
   private readonly hooks: AiWorkerHooks
 
   constructor(hooks: AiWorkerHooks) {
@@ -417,6 +457,53 @@ export class AiWorkerController {
     await this.stopOwned()
   }
 
+  /**
+   * Stop the worker this controller spawned and start one replacement.
+   * A request that is still running is left alone. An unknown process on the
+   * AI port is never signaled.
+   */
+  async restartOwnedEngine(): Promise<EngineRestartResult> {
+    if (this.active > 0) {
+      return { ok: false, code: 'busy', message: 'The voice engine is still working. Try again in a moment.' }
+    }
+    return this.enqueue(async () => {
+      if (this.closed) return { ok: false, code: 'failed', message: 'AI Clone is shutting down.' }
+      if (this.active > 0) {
+        return { ok: false, code: 'busy', message: 'The voice engine is still working. Try again in a moment.' }
+      }
+      if (this.owned) await this.stopOwned()
+      if (await this.isPortBusy()) return { ok: false, code: 'foreign', message: PORT_IN_USE_MESSAGE }
+      if (this.hooks.peekClaim && await this.hooks.peekClaim()) {
+        return { ok: false, code: 'foreign', message: PORT_IN_USE_MESSAGE }
+      }
+      if (!this.hooks.canStart()) {
+        return { ok: false, code: 'failed', message: 'AI Voice Clip Cloning is not installed. Install the voice engine from Settings.' }
+      }
+      try {
+        await this.ensure()
+        this.scheduleIdle()
+        return { ok: true }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'The AI engine failed to start.'
+        return { ok: false, code: message === PORT_IN_USE_MESSAGE ? 'foreign' : 'failed', message }
+      }
+    })
+  }
+
+  /**
+   * Stop an in-flight generation by closing only the worker this app started.
+   * Returns `foreign` when the port belongs to something else, without signaling it.
+   */
+  async cancelOwnedGeneration(): Promise<'stopped' | 'idle' | 'foreign'> {
+    this.cancellation += 1
+    if (!this.owned) {
+      if (this.active === 0 && await this.isPortBusy()) return 'foreign'
+      return this.active > 0 ? 'stopped' : 'idle'
+    }
+    await this.stopOwned()
+    return 'stopped'
+  }
+
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.chain.then(operation, operation)
     this.chain = run.then(() => undefined, () => undefined)
@@ -424,6 +511,7 @@ export class AiWorkerController {
   }
 
   private async ensure(): Promise<WorkerSession> {
+    const mark = this.cancellation
     if (this.owned && this.token) {
       const owned = this.owned
       const token = this.token
@@ -446,6 +534,7 @@ export class AiWorkerController {
         this.note('lifecycle: the owned AI worker did not respond. It was left running so an in-progress voice is not interrupted.')
         throw new Error('The voice engine is still working. Try again in a moment.')
       }
+      if (this.cancellation !== mark) throw new Error(AI_GENERATION_STOPPED)
       if (this.owned === owned && status === 'occupied') {
         this.note('lifecycle: the AI port answered without the worker this app started. Not sending audio there.')
         throw new Error(PORT_IN_USE_MESSAGE)
@@ -454,6 +543,7 @@ export class AiWorkerController {
         return await this.failOwnedStartup(owned, status === 'timeout')
       }
     }
+    if (this.cancellation !== mark) throw new Error(AI_GENERATION_STOPPED)
     if (this.closed) throw new Error('AI Clone is shutting down.')
     if (await this.isPortBusy()) throw new Error(PORT_IN_USE_MESSAGE)
     if (!this.hooks.canStart()) {
@@ -466,6 +556,10 @@ export class AiWorkerController {
         throw new Error(PORT_IN_USE_MESSAGE)
       }
       this.claimOwned = true
+    }
+    if (this.cancellation !== mark) {
+      this.releaseClaim()
+      throw new Error(AI_GENERATION_STOPPED)
     }
     const token = randomBytes(32).toString('hex')
     this.loadingNotice?.()
@@ -509,6 +603,7 @@ export class AiWorkerController {
       this.note(`lifecycle: AI worker is ready after ${Math.round(this.now() - started)} ms.`)
       return { url: AI_SERVER_URL, token }
     }
+    if (this.cancellation !== mark) throw new Error(AI_GENERATION_STOPPED)
     if (status === 'occupied') {
       this.note('lifecycle: the AI port answered without the worker this app started. Not sending audio there.')
       if (this.owned === owned) await this.stopOwned()

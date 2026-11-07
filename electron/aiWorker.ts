@@ -8,6 +8,7 @@ import {
   localPortBusy,
   probeAiServer,
   releaseWorkerClaim,
+  aiOutputDirectoryFor,
   resolveAiRuntime,
   startUvicornWorker,
   updateWorkerClaim,
@@ -15,6 +16,12 @@ import {
 } from './aiWorkerControl.js'
 
 let controller: AiWorkerController | null = null
+let outputDirectory = ''
+
+export function getAiOutputDirectory(): string {
+  if (!outputDirectory) getAiWorker()
+  return outputDirectory
+}
 
 export function getAiWorker(): AiWorkerController {
   if (controller) return controller
@@ -28,6 +35,7 @@ export function getAiWorker(): AiWorkerController {
       }
     : {})
   const claimDir = path.join(localAppDataDirectory(app.getPath('appData')), 'SlipUpClipz')
+  outputDirectory = aiOutputDirectoryFor(runtime)
   const created = new AiWorkerController({
     canStart: () => existsSync(runtime.pythonPath) && existsSync(runtime.serverPath),
     portBusy: () => localPortBusy(),

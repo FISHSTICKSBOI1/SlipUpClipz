@@ -62,6 +62,8 @@ interface ElectronAPI {
     health: () => Promise<{ ready: boolean; message?: string }>
     transcribe: (payload: { audioWav: Uint8Array; consent: boolean }) => Promise<{ text: string; noSpeech: boolean; unclear: boolean; truncated: boolean }>
     generate: (payload: { audioWav: Uint8Array; refText: string; text: string; temporary?: boolean; sessionId?: string; consent: boolean; requestId?: string }) => Promise<Uint8Array>
+    restart: () => Promise<{ ok: true } | { ok: false; code: 'busy' | 'foreign' | 'failed'; message: string }>
+    cancel: (payload: { requestId: string; sessionId?: string }) => Promise<{ stopped: boolean; message?: string }>
     onGenerateProgress: (callback: (event: { requestId: string; stage: 'loading' | 'generating' | 'finishing' }) => void) => () => void
   }
   settings: {

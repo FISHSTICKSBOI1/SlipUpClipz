@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { describe, it } from 'node:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -13,6 +13,7 @@ import {
   localPortBusy,
   PORT_IN_USE_MESSAGE,
   releaseWorkerClaim,
+  removeOwnedSessionTemps,
   REUSE_PROBE_MS,
   updateWorkerClaim,
   workerClaimHeld,
@@ -524,6 +525,156 @@ describe('AI worker lifecycle', () => {
       assert.equal(acquireWorkerClaim(dir), 'acquired')
       releaseWorkerClaim(dir)
       assert.equal(workerClaimHeld(dir), false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not interrupt a healthy slow generation', async () => {
+    let killed = 0
+    let alive = false
+    const worker = controller({
+      probe: async () => (alive ? readyProbe() : { state: 'down' }),
+      spawn: () => {
+        alive = true
+        return liveProcess(() => {
+          killed += 1
+          alive = false
+        })
+      },
+    })
+    const pending = worker.run(true, async () => {
+      await wait(80)
+      return 'finished'
+    })
+    await wait(20)
+    const restart = await worker.restartOwnedEngine()
+    assert.equal(restart.ok, false)
+    if (!restart.ok) assert.equal(restart.code, 'busy')
+    assert.equal(killed, 0)
+    assert.equal(await pending, 'finished')
+    assert.equal(killed, 0)
+    await worker.shutdown()
+  })
+
+  it('restarts the owned engine once and does not leave two workers', async () => {
+    let spawned = 0
+    let alive = 0
+    const worker = controller({
+      probe: async () => (alive > 0 ? readyProbe() : { state: 'down' }),
+      spawn: () => {
+        spawned += 1
+        alive += 1
+        return liveProcess(() => {
+          alive -= 1
+        })
+      },
+    })
+    await worker.run(true, async () => 'ok')
+    const restart = await worker.restartOwnedEngine()
+    assert.equal(restart.ok, true)
+    assert.equal(spawned, 2)
+    assert.equal(alive, 1)
+    assert.equal(worker.status().owned, true)
+    await worker.shutdown()
+    assert.equal(alive, 0)
+    assert.equal(spawned, 2)
+  })
+
+  it('does not terminate an unknown program occupying the AI port', async () => {
+    const stranger = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    let spawned = 0
+    let killed = 0
+    try {
+      const worker = controller({
+        portBusy: async () => true,
+        probe: async () => ({ state: 'down' }),
+        spawn: () => {
+          spawned += 1
+          return liveProcess(() => {
+            killed += 1
+          })
+        },
+      })
+      const restart = await worker.restartOwnedEngine()
+      assert.equal(restart.ok, false)
+      if (!restart.ok) assert.equal(restart.code, 'foreign')
+      assert.equal(await worker.cancelOwnedGeneration(), 'foreign')
+      assert.equal(spawned, 0)
+      assert.equal(killed, 0)
+      assert.equal(stranger.exitCode, null)
+      await worker.shutdown()
+      assert.equal(stranger.exitCode, null)
+    } finally {
+      stranger.kill()
+    }
+  })
+
+  it('stops an owned generation and lets the next request start one worker', async () => {
+    let spawned = 0
+    let killed = 0
+    let alive = false
+    let releaseProbe = () => {}
+    let markSpawned = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseProbe = resolve
+    })
+    const spawnedOnce = new Promise<void>((resolve) => {
+      markSpawned = resolve
+    })
+    const worker = controller({
+      startupMs: 5_000,
+      probe: async () => {
+        await gate
+        return alive ? readyProbe() : { state: 'down' }
+      },
+      spawn: () => {
+        spawned += 1
+        alive = true
+        markSpawned()
+        return liveProcess(() => {
+          killed += 1
+          alive = false
+        })
+      },
+    })
+    const pending = worker.run(true, async () => 'voice')
+    await spawnedOnce
+    assert.equal(spawned, 1)
+    const stopped = worker.cancelOwnedGeneration()
+    releaseProbe()
+    assert.equal(await stopped, 'stopped')
+    await assert.rejects(pending, /generation was stopped/i)
+    assert.equal(killed, 1)
+    assert.equal(spawned, 1)
+    await worker.run(true, async () => 'again')
+    assert.equal(spawned, 2)
+    assert.equal(worker.status().owned, true)
+    await worker.shutdown()
+  })
+
+  it('removes only the cancelled session temporary wavs', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'slipup-temps-'))
+    const session = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const other = 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const owned = `tmp-${session}-${'a'.repeat(32)}.wav`
+    const foreign = `tmp-${other}-${'b'.repeat(32)}.wav`
+    const historical = `${'c'.repeat(32)}.wav`
+    try {
+      writeFileSync(path.join(dir, owned), 'RIFF')
+      writeFileSync(path.join(dir, foreign), 'RIFF')
+      writeFileSync(path.join(dir, 'reference.wav'), 'RIFF')
+      writeFileSync(path.join(dir, historical), 'RIFF')
+      writeFileSync(path.join(dir, 'compare-20260101-t1.05.wav'), 'RIFF')
+      assert.deepEqual(removeOwnedSessionTemps(dir, session), [owned])
+      assert.equal(existsSync(path.join(dir, owned)), false)
+      assert.equal(existsSync(path.join(dir, foreign)), true)
+      assert.equal(existsSync(path.join(dir, 'reference.wav')), true)
+      assert.equal(existsSync(path.join(dir, historical)), true)
+      assert.equal(existsSync(path.join(dir, 'compare-20260101-t1.05.wav')), true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
