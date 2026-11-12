@@ -1,5 +1,7 @@
 # SURVEY20 post-release correction
 
+Historical PR #2 report. PR #2 was merged; the percentage compatibility correction and current verification are documented in `WEBSITE_SURVEY20_PERCENTAGE_FIX.md`. Fixed-only validation described below is superseded by that correction.
+
 ## Confirmed defect and scope
 
 Based on production main `ad1d6aede478f3ae67ff4bcb8a3ec857e99ae7e9` in the isolated `codex/survey20-live-fix` worktree. The reported exact error is emitted by `resolveIntroCoupon` when the effective `STRIPE_INTRO_COUPON_ID` is empty and the key is live. `resolvePublicPromotionCode` called it before retrieving/listing promotions, so an existing valid SURVEY20 could never be considered. This does not prove that a Stripe coupon is missing. A synthetic live-key regression reproduced 503 instead of 200 before the fix.
