@@ -89,7 +89,7 @@ export function HomePage() {
             alt="SlipUpClipz Clips page with the clip library and audio input settings"
             width={1920}
             height={1080}
-            float
+            imageViewportClassName="hero-shot-viewport"
             priority
             className="motion-safe:animate-fade-up lg:justify-self-end"
           />
