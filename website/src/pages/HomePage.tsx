@@ -88,7 +88,7 @@ export function HomePage() {
             shot="homepageClips"
             alt="SlipUpClipz Clips page with the clip library and audio input settings"
             width={1920}
-            height={991}
+            height={1080}
             float
             priority
             className="motion-safe:animate-fade-up lg:justify-self-end"

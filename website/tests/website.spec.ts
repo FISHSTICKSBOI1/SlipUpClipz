@@ -172,9 +172,9 @@ for (const width of [360,390,768,1024,1440]) {
         const hero = page.locator('.hero-visual img')
         await expect(hero).toHaveAttribute('src', '/images/screenshots/homepage-clips.png')
         await expect(hero).toHaveJSProperty('naturalWidth', 1920)
-        await expect(hero).toHaveJSProperty('naturalHeight', 991)
+        await expect(hero).toHaveJSProperty('naturalHeight', 1080)
         const ratio = await hero.evaluate(img => img.clientWidth / img.clientHeight)
-        expect(ratio).toBeCloseTo(1920 / 991, 1)
+        expect(ratio).toBeCloseTo(1920 / 1080, 1)
       }
     }
     if(width<1024) {
@@ -415,3 +415,24 @@ test('Manage Pro centers its column and aligns the recovery and primary forms', 
     }
   }
 })
+
+for (const width of [360, 768, 1440]) {
+  test(`updated homepage screenshot preserves full AI Clone image at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1100 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/')
+    const image = page.locator('img[src="/images/screenshots/homepage-clips.png"]')
+    await image.scrollIntoViewIfNeeded()
+    await expect(image).toBeVisible()
+    await expect(image).toHaveJSProperty('naturalWidth', 1920)
+    await expect(image).toHaveJSProperty('naturalHeight', 1080)
+    const dimensions = await image.evaluate(img => {
+      const r = img.getBoundingClientRect()
+      return { width: r.width, height: r.height, fit: getComputedStyle(img).objectFit }
+    })
+    expect(dimensions.fit).toBe('contain')
+    expect(Math.abs(dimensions.width / dimensions.height - 1920 / 1080)).toBeLessThan(0.01)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.locator('.hero-visual').screenshot({ path: testInfo.outputPath(`hero-${width}.png`), animations: 'disabled' })
+  })
+}
