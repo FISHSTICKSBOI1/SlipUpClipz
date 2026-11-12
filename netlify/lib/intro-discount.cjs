@@ -70,7 +70,7 @@ function describeStripePrice(price) {
 }
 
 function assertIntroCoupon(coupon) {
-  if (!coupon || coupon.valid === false) {
+  if (!coupon || coupon.valid !== true) {
     return 'The introductory coupon is missing or no longer active.'
   }
   if (coupon.duration !== 'once') {
@@ -144,16 +144,17 @@ function couponIdFromPromotion(promotionCode) {
 }
 
 async function assertPromotionCoupon(stripe, promotionCode) {
+  if (!promotionCode?.id || promotionCode.active !== true) {
+    throw couponError('SURVEY20 is not an active promotion code.')
+  }
   const couponId = couponIdFromPromotion(promotionCode)
+  if (!couponId) throw couponError('SURVEY20 has no valid introductory coupon.')
   const coupon =
     promotionCode?.coupon && typeof promotionCode.coupon !== 'string'
       ? promotionCode.coupon
       : await stripe.coupons.retrieve(couponId)
   const problem = assertIntroCoupon(coupon)
   if (problem) throw couponError(problem)
-  if (promotionCode.active === false) {
-    throw couponError('SURVEY20 is not an active promotion code.')
-  }
   if (String(promotionCode.code || '').toUpperCase() !== PUBLIC_PROMOTION_CODE) {
     throw couponError('The configured promotion code is not SURVEY20.')
   }
@@ -161,7 +162,7 @@ async function assertPromotionCoupon(stripe, promotionCode) {
 }
 
 async function resolvePublicPromotionCode(stripe, secretKey) {
-  const coupon = await resolveIntroCoupon(stripe, secretKey)
+  // An existing promotion owns its coupon; no separate coupon setting is needed.
   const configuredId = String(process.env.STRIPE_SURVEY_PROMOTION_CODE_ID || '').trim()
   if (configuredId) {
     return assertPromotionCoupon(stripe, await stripe.promotionCodes.retrieve(configuredId))
@@ -169,8 +170,12 @@ async function resolvePublicPromotionCode(stripe, secretKey) {
 
   const listed = await stripe.promotionCodes.list({
     code: PUBLIC_PROMOTION_CODE,
-    limit: 1,
+    active: true,
+    limit: 2,
   })
+  if (listed?.data?.length > 1 || listed?.has_more) {
+    throw couponError('Multiple active SURVEY20 promotions exist. Configure STRIPE_SURVEY_PROMOTION_CODE_ID explicitly.')
+  }
   const existing = listed?.data?.[0]
   if (existing) return assertPromotionCoupon(stripe, existing)
 
@@ -184,6 +189,7 @@ async function resolvePublicPromotionCode(stripe, secretKey) {
     throw couponError('Stripe test mode is required before SURVEY20 can be created.')
   }
 
+  const coupon = await resolveIntroCoupon(stripe, secretKey)
   return stripe.promotionCodes.create({
     coupon: coupon.id,
     code: PUBLIC_PROMOTION_CODE,

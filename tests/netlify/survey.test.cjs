@@ -187,16 +187,18 @@ describe('survey storage and public SURVEY20 checkout', () => {
     assert.equal(other.statusCode, 400)
   })
 
-  it('does not create a live Stripe coupon or promotion code', async () => {
+  it('reuses an existing live promotion without a separate coupon setting', async () => {
     process.env.STRIPE_PRICE_ID = 'price_live_untouched'
     process.env.STRIPE_SECRET_KEY = 'sk_live_blocked'
     delete process.env.STRIPE_INTRO_COUPON_ID
     delete process.env.STRIPE_SURVEY_PROMOTION_CODE_ID
     const stripe = fakeStripe()
     const response = await createCheckoutSession(post({ promotionCode: 'SURVEY20' }), { stripe })
-    assert.equal(response.statusCode, 503)
-    assert.match(JSON.parse(response.body).error, /not configured for live checkout/)
-    assert.equal(stripe.calls.length, 0)
+    assert.equal(response.statusCode, 200)
+    const session = stripe.calls.find((call) => call.type === 'create-session').params
+    assert.deepEqual(session.line_items, [{ price: 'price_live_untouched', quantity: 1 }])
+    assert.deepEqual(session.discounts, [{ promotion_code: 'promo_survey20' }])
+    assert.equal(session.allow_promotion_codes, undefined)
   })
 
   it('refuses survey storage in production when the private IP salt is missing', async () => {
