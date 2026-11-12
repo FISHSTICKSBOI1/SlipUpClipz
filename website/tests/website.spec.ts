@@ -417,7 +417,7 @@ test('Manage Pro centers its column and aligns the recovery and primary forms', 
 })
 
 for (const width of [360, 768, 1440]) {
-  test(`updated homepage screenshot preserves full AI Clone image at ${width}px`, async ({ page }, testInfo) => {
+  test(`homepage hero preserves the screenshot ratio and steady reduced-motion crop at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1100 })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/')
@@ -427,12 +427,47 @@ for (const width of [360, 768, 1440]) {
     await expect(image).toHaveJSProperty('naturalWidth', 1920)
     await expect(image).toHaveJSProperty('naturalHeight', 1080)
     const dimensions = await image.evaluate(img => {
-      const r = img.getBoundingClientRect()
-      return { width: r.width, height: r.height, fit: getComputedStyle(img).objectFit }
+      const style = getComputedStyle(img)
+      return {
+        width: img.clientWidth,
+        height: img.clientHeight,
+        fit: style.objectFit,
+        animation: style.animationName,
+        zoom: new DOMMatrixReadOnly(style.transform).a,
+      }
     })
     expect(dimensions.fit).toBe('contain')
+    expect(dimensions.animation).toBe('none')
+    expect(dimensions.zoom).toBeCloseTo(width < 640 ? 1.24 : 1.17)
     expect(Math.abs(dimensions.width / dimensions.height - 1920 / 1080)).toBeLessThan(0.01)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.locator('.hero-visual').screenshot({ path: testInfo.outputPath(`hero-${width}.png`), animations: 'disabled' })
   })
 }
+
+test('homepage hero zooms and pans once inside a fixed image viewport', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/')
+  const image = page.locator('.hero-shot-viewport img')
+  const motion = await image.evaluate(async img => {
+    const push = img.getAnimations().find(animation =>
+      animation instanceof CSSAnimation && animation.animationName === 'hero-shot-push'
+    )
+    if (!push?.effect) throw new Error('Hero zoom animation is missing')
+    push.pause()
+    await push.ready
+    const timing = push.effect.getComputedTiming()
+    const sample = (time: number) => {
+      push.currentTime = time
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(img).transform)
+      return { zoom: matrix.a, x: matrix.e, width: img.clientWidth, height: img.clientHeight }
+    }
+    return { start: sample(0), end: sample(timing.endTime), after: sample(timing.endTime + 500), timing }
+  })
+  expect(motion.timing.iterations).toBe(1)
+  expect(motion.end.zoom).toBeGreaterThan(motion.start.zoom)
+  expect(motion.end.x).toBeLessThan(motion.start.x)
+  expect(motion.end.width).toBe(motion.start.width)
+  expect(motion.end.height).toBe(motion.start.height)
+  expect(motion.after).toEqual(motion.end)
+})

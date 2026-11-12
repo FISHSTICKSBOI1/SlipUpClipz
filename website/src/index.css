@@ -141,6 +141,31 @@
   .hero-headline span { display: block; color: #e3abff; }
   .hero-visual { position: relative; min-width: 0; padding: 3rem 0; }
   .hero-visual .shot-frame { border-color: #9d81e9; box-shadow: 0 24px 100px #7461db44, 0 0 0 10px #c6b3ff09; transform: rotate(-2deg); }
+  .hero-shot-viewport {
+    --hero-shot-zoom: 1.17;
+    overflow: hidden;
+  }
+
+  .hero-shot-viewport img {
+    transform-origin: 58% 88%;
+    transform: translate(-1%, -0.5%) scale(var(--hero-shot-zoom));
+  }
+
+  @media (max-width: 639px) {
+    .hero-shot-viewport { --hero-shot-zoom: 1.24; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-shot-viewport img {
+      animation: hero-shot-push 4.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+    }
+  }
+
+  @keyframes hero-shot-push {
+    from { transform: translate(0, 0) scale(1.06); }
+    to { transform: translate(-1%, -0.5%) scale(var(--hero-shot-zoom)); }
+  }
+
   .hero-orbit { position: absolute; inset: -3rem -1rem; border: 1px solid #a1a6fa44; border-radius: 50%; transform: rotate(-25deg); }
   .hero-orbit::before { content: '✦'; position: absolute; right: 10%; top: 0; font-size: 3rem; color: #b6d4ff; }
   .hero-sticker { position: absolute; z-index: 2; padding: .8rem 1rem; border-radius: 12px; font-size: .7rem; letter-spacing: .06em; font-weight: 800; box-shadow: 0 8px 30px #0004; }
