@@ -6,7 +6,7 @@ const {
   parseJsonBody,
   clearClaimCookieHeader,
 } = require('../lib/survey.cjs')
-const { consumeRateLimit, saveFeedbackResponse } = require('../lib/feedback-store.cjs')
+const { consumeRateLimit, saveFeedbackResponse, feedbackId } = require('../lib/feedback-store.cjs')
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -20,8 +20,8 @@ exports.handler = async (event) => {
       return jsonResponse(400, { error: validation.error })
     }
 
-    const ipHash = hashClientAddress(clientAddress(event))
-    const rate = await consumeRateLimit(ipHash, event)
+    const ipHash = hashClientAddress(clientAddress(event), event)
+    const rate = await consumeRateLimit(ipHash, event, Date.now(), body.submissionId ? feedbackId(body.submissionId, ipHash) : null)
     if (!rate.allowed) {
       return jsonResponse(429, {
         error: 'Too many survey submissions from this network. You can try again tomorrow.',
@@ -30,6 +30,7 @@ exports.handler = async (event) => {
 
     await saveFeedbackResponse({
       answers: validation.answers,
+      submissionId: body.submissionId,
       ipHash,
       event,
     })
@@ -40,11 +41,13 @@ exports.handler = async (event) => {
       { 'Set-Cookie': clearClaimCookieHeader() },
     )
   } catch (error) {
-    const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500
-    if (statusCode >= 500) console.error('submit-survey failed', error)
-    const reveal = statusCode < 500 || error?.code === 'survey-salt-missing'
-    return jsonResponse(statusCode, {
-      error: reveal ? error.message || 'Unable to save feedback right now.' : 'Unable to save feedback right now.',
+    if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+      return jsonResponse(error.statusCode, { error: error.message })
+    }
+    const missingSalt = error?.code === 'survey-salt-missing'
+    console.error('submit-survey failed', { category: missingSalt ? 'survey-salt-missing' : 'storage', statusCode: 503 })
+    return jsonResponse(503, {
+      error: missingSalt ? error.message : 'We could not confirm that your feedback was saved. Please try again later.',
     })
   }
 }

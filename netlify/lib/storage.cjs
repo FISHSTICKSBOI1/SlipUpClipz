@@ -63,22 +63,51 @@ function connectCommerceBlobs(event) {
   blobs.connectLambda(event)
 }
 
-function getNetlifyBlobStore() {
+function getNetlifyBlobStore(fetch) {
   const blobs = loadBlobsModule()
   if (!blobs || typeof blobs.getStore !== 'function') {
     throw new Error('@netlify/blobs is not available')
   }
 
-  return blobs.getStore(STORE_NAME)
+  return blobs.getStore(STORE_NAME, { fetch })
 }
 
-function wrapBlobStore(store, environment) {
+async function writeConditionalBlob(createStore, key, value, options) {
+  let status
+  // This client is scoped to one write. Never let the SDK retry an ambiguous PUT
+  // or mistake its result for a confirmed write or genuine precondition failure.
+  const store = createStore(async (url, request) => {
+    const headers = new Headers(request?.headers)
+    if (!headers.has('if-match') && !headers.has('if-none-match')) {
+      return globalThis.fetch(url, request)
+    }
+    try {
+      const response = await globalThis.fetch(url, { ...request, redirect: 'error' })
+      status = response.status
+      if (status === 200 || status === 412) return response
+    } catch {
+      status = undefined
+    }
+    // Stop the SDK retry loop. The actual outcome is checked below.
+    return new Response(null, { status: 412 })
+  })
+  const result = await store.set(key, value, options)
+  if (status === 200 && result?.modified === true) return result
+  if (status === 412 && result?.modified === false) return result
+  throw new Error('Netlify Blobs conditional write could not be confirmed')
+}
+
+function wrapBlobStore(createStore, environment) {
+  const store = createStore()
   return {
     environment,
     async get(key, options) {
       return store.get(key, options)
     },
     async set(key, value, options) {
+      if (options?.onlyIfNew || options?.onlyIfMatch) {
+        return writeConditionalBlob(createStore, key, value, options)
+      }
       return store.set(key, value, options)
     },
     async setJSON(key, value, options) {
@@ -87,20 +116,20 @@ function wrapBlobStore(store, environment) {
       // makeRequest, but makeRequest only reads a nested `conditions` object.
       // The If-None-Match and If-Match headers are never sent, so two concurrent
       // setJSON calls can both succeed. Store.set passes `conditions` correctly.
-      if (conditional && typeof store.set === 'function') {
-        return store.set(key, JSON.stringify(value), options)
+      if (conditional) {
+        return writeConditionalBlob(createStore, key, JSON.stringify(value), options)
       }
       return store.setJSON(key, value, options)
     },
     async getJSON(key) {
       return store.get(key, { type: 'json' })
     },
-    async getWithMetadata(key) {
+    async getWithMetadata(key, options = {}) {
       if (typeof store.getWithMetadata !== 'function') {
         const data = await store.get(key, { type: 'json' })
         return data ? { data, etag: undefined } : null
       }
-      return store.getWithMetadata(key, { type: 'json' })
+      return store.getWithMetadata(key, { ...options, type: 'json' })
     },
     async delete(key) {
       await store.delete(key)
@@ -216,7 +245,7 @@ async function getCommerceStore() {
 
   if (isDeployedNetlifyRuntime()) {
     try {
-      return wrapBlobStore(getNetlifyBlobStore(), 'production')
+      return wrapBlobStore(getNetlifyBlobStore, 'production')
     } catch (error) {
       throw new Error(
         `Netlify Blobs is required in production commerce storage: ${error instanceof Error ? error.message : error}`,
@@ -226,7 +255,7 @@ async function getCommerceStore() {
 
   if (isLocalNetlifyDev()) {
     try {
-      return wrapBlobStore(getNetlifyBlobStore(), 'production')
+      return wrapBlobStore(getNetlifyBlobStore, 'production')
     } catch {
       console.warn('[commerce-storage] Using dev-local file store. Never use this data in production.')
       return createDevStore()
@@ -414,6 +443,7 @@ async function adjustAffiliateCommission(code, adjustment) {
 }
 
 module.exports = {
+  writeConditionalBlob,
   connectCommerceBlobs,
   getCommerceStore,
   licenseExists,

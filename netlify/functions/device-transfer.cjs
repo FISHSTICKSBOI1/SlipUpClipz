@@ -24,7 +24,6 @@ function digest(value) {
 }
 
 exports.handler = async (event) => {
-  connectCommerceBlobs(event)
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
@@ -43,21 +42,23 @@ exports.handler = async (event) => {
     return jsonResponse(200, GENERIC)
   }
 
-  const store = await getCommerceStore()
-  const ipAllowed = await consumeRecoveryRateLimit(
-    store,
-    `device-transfer-rate:ip:${digest(clientAddress(event))}`,
-    Date.now(),
-    IP_LIMIT,
-  )
-  const emailAllowed = await consumeRecoveryRateLimit(
-    store,
-    `device-transfer-rate:email:${digest(email)}`,
-    Date.now(),
-    EMAIL_LIMIT,
-  )
-  if (!ipAllowed.allowed || !emailAllowed.allowed) {
-    return jsonResponse(429, { error: 'Too many requests. Try again tomorrow.' })
+  let store
+  const limited = () => jsonResponse(429, { error: 'Too many requests. Try again tomorrow.' })
+  try {
+    connectCommerceBlobs(event)
+    store = await getCommerceStore()
+    const ipAllowed = await consumeRecoveryRateLimit(
+      store, `device-transfer-rate:ip:${digest(clientAddress(event))}`, Date.now(), IP_LIMIT,
+    )
+    if (!ipAllowed.allowed) return limited()
+
+    const emailAllowed = await consumeRecoveryRateLimit(
+      store, `device-transfer-rate:email:${digest(email)}`, Date.now(), EMAIL_LIMIT,
+    )
+    if (!emailAllowed.allowed) return limited()
+  } catch {
+    console.error('[device-transfer] Rate limit storage unavailable')
+    return jsonResponse(503, { error: 'Device transfer is temporarily unavailable.' })
   }
 
   const license = await getLicenseByKey(licenseKey)

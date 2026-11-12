@@ -10,8 +10,8 @@ export function PriceDisclosure({ quote }: { quote: PricingQuote }) {
   return (
     <div className="space-y-2 text-sm leading-relaxed text-slate-400">
       <p>
-        {priceSource} Pro renews each year at the regular price unless you cancel. Completing the
-        survey is a thank-you for $1 off the first year. At this price, that first year is{' '}
+        {priceSource} Pro renews each year at the regular price unless you cancel. The advertised
+        survey offer is $1 off the first year, subject to availability at checkout. If applied, that first year is{' '}
         {firstYear} and later years return to {regular}. The discount applies once, to the first
         invoice of a new subscription bought through Stripe on this website. It does not apply to
         Microsoft Store purchases.

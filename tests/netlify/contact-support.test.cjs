@@ -100,3 +100,12 @@ describe('contact-support handler', () => {
     assert.doesNotMatch(body.error, /re_test_key/)
   })
 })
+
+it('rejects null and array JSON bodies without throwing or sending email', async () => {
+  const { handler } = require('../../netlify/functions/contact-support.cjs')
+  mock.method(global, 'fetch', async () => { throw new Error('must not send') })
+  for (const body of ['null', '[]']) {
+    const response = await handler({ httpMethod: 'POST', body })
+    assert.equal(response.statusCode, 400)
+  }
+})

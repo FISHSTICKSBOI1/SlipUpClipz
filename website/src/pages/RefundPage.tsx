@@ -13,7 +13,6 @@ export function RefundPage() {
       />
       <LegalShell
         title="Refund Policy"
-        updated="Updated October 23, 2026. No fixed refund window has been adopted. Requests are reviewed individually, and the site does not issue a refund by itself. A lawyer should confirm this before publication, including any rights that must be offered where you sell."
       >
         <p>
           Website Pro and Microsoft Store purchases are different. Use the path that matches where
@@ -40,10 +39,7 @@ export function RefundPage() {
           email{' '}
           <a href={`mailto:${SITE.supportEmail}`}>{SITE.supportEmail}</a> with the purchase email and
           approximate date.
-          the license was refunded, revoked, or disputed. Removing the license from a computer does
-          not cancel billing. If Pro turns off before that paid period ends, email{' '}
-          <a href={`mailto:${SITE.supportEmail}`}>{SITE.supportEmail}</a> with the purchase email and
-          approximate date.
+
         </p>
         <p>
           Refunds of a charge that already went through are reviewed one request at a time. We have

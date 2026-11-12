@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AI_VOICE_SHOTS, type ShowcaseShot } from '../config/aiVoiceShowcase'
 import { cropFrameStyle } from '../lib/cropFrame'
+import { MotionToggle } from './MotionToggle'
 
 const ADVANCE_MS = 5000
 const FADE_MS = 750
@@ -33,12 +34,22 @@ function CroppedShot({
 
 export function AiScreenshotGallery() {
   const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const galleryRef = useRef<HTMLDivElement>(null)
+  const galleryId = useId()
   const [open, setOpen] = useState(false)
   const [holding, setHolding] = useState(false)
   const [interaction, setInteraction] = useState(0)
   const [reduceMotion, setReduceMotion] = useState(
     () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   )
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting))
+    if (galleryRef.current) observer.observe(galleryRef.current)
+    return () => observer.disconnect()
+  }, [])
   const count = AI_VOICE_SHOTS.length
   const shot = AI_VOICE_SHOTS[index] ?? AI_VOICE_SHOTS[0]
   const frame = cropFrameStyle(shot.crop, {
@@ -64,15 +75,17 @@ export function AiScreenshotGallery() {
   }, [])
 
   useEffect(() => {
-    if (open || holding || reduceMotion) return
+    if (open || holding || reduceMotion || paused || focused || !visible) return
     const timer = window.setTimeout(() => {
       setIndex((current) => (current + 1) % count)
     }, ADVANCE_MS)
     return () => window.clearTimeout(timer)
-  }, [index, open, holding, interaction, reduceMotion, count])
+  }, [index, open, holding, interaction, reduceMotion, count, paused, focused, visible])
 
   return (
-    <div
+    <div ref={galleryRef}
+      onFocusCapture={() => setFocused(true)}
+      onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFocused(false) }}
       onPointerDown={() => setHolding(true)}
       onPointerUp={() => {
         setHolding(false)
@@ -85,17 +98,29 @@ export function AiScreenshotGallery() {
       onPointerLeave={() => setHolding(false)}
       onKeyDown={noteInteraction}
     >
-      <h3 className="font-display text-lg font-bold text-white sm:text-xl">See the Workflow</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-display text-lg font-bold text-white sm:text-xl">See the Workflow</h3>
+        {!reduceMotion && <MotionToggle name="slideshow" paused={paused} onToggle={() => setPaused(value => !value)} />}
+      </div>
       <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="AI Voice Clip Cloning steps">
         {AI_VOICE_SHOTS.map((item, itemIndex) => (
           <button
             key={item.id}
             type="button"
             role="tab"
+            id={`${galleryId}-tab-${itemIndex}`}
+            aria-controls={`${galleryId}-panel`}
+            tabIndex={itemIndex === index ? 0 : -1}
+            onKeyDown={(event) => {
+              const next = event.key === 'ArrowRight' ? (index + 1) % count : event.key === 'ArrowLeft' ? (index + count - 1) % count : event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : null
+              if (next === null) return
+              event.preventDefault(); go(next)
+              document.getElementById(`${galleryId}-tab-${next}`)?.focus()
+            }}
             aria-selected={itemIndex === index}
             className={`min-h-11 rounded-full px-4 text-sm font-semibold ${
               itemIndex === index
-                ? 'bg-glow-purple text-white'
+                ? 'bg-[#6840bd] text-white'
                 : 'border border-white/15 text-slate-300 hover:text-white'
             }`}
             onClick={() => go(itemIndex)}
@@ -104,7 +129,7 @@ export function AiScreenshotGallery() {
           </button>
         ))}
       </div>
-      <figure className="mt-4">
+      <figure className="mt-4" role="tabpanel" id={`${galleryId}-panel`} aria-labelledby={`${galleryId}-tab-${index}`}>
         <button
           type="button"
           className="shot-frame block w-full text-left"
@@ -114,14 +139,6 @@ export function AiScreenshotGallery() {
           }}
         >
           <span className="sr-only">Enlarge {shot.title}. </span>
-          <span className="flex items-center gap-2 border-b border-ink-border/80 bg-ink/70 px-3 py-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" aria-hidden />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" aria-hidden />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" aria-hidden />
-            <span className="ml-2 truncate text-[11px] font-medium text-slate-400">
-              SlipUpClipz · AI Voice Clip Cloning
-            </span>
-          </span>
           <div className="relative w-full overflow-hidden bg-black" style={{ aspectRatio: frame.aspectRatio }}>
             {AI_VOICE_SHOTS.map((item, itemIndex) => (
               <CroppedShot key={item.id} shot={item} active={itemIndex === index} />
@@ -183,6 +200,7 @@ function ShotLightbox({
   onClose: () => void
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
   const indexRef = useRef(index)
   const onIndexRef = useRef(onIndex)
   const onCloseRef = useRef(onClose)
@@ -199,8 +217,15 @@ function ShotLightbox({
     const previous = document.activeElement as HTMLElement | null
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    if (!dialogRef.current?.open) dialogRef.current?.showModal()
     closeRef.current?.focus()
     function onKey(event: KeyboardEvent) {
+      if (event.key === 'Tab') {
+        const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
+        const first = buttons[0], last = buttons[buttons.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
       if (event.key === 'Escape') onCloseRef.current()
       if (event.key === 'ArrowRight') onIndexRef.current(indexRef.current + 1)
       if (event.key === 'ArrowLeft') onIndexRef.current(indexRef.current - 1)
@@ -214,12 +239,12 @@ function ShotLightbox({
   }, [])
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4"
-      role="dialog"
+    <dialog ref={dialogRef}
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-transparent p-4 backdrop:bg-black/80"
       aria-modal="true"
       aria-label={`${shot.title} screenshot`}
-      onClick={onClose}
+      onCancel={onClose}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose() }}
     >
       <div
         className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl border border-white/10 bg-[#120a22] p-4 sm:p-6"
@@ -259,7 +284,7 @@ function ShotLightbox({
           </button>
         </div>
       </div>
-    </div>,
+    </dialog>,
     document.body,
   )
 }

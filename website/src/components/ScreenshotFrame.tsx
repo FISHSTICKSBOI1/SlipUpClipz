@@ -4,6 +4,7 @@ import { SITE } from '../config/site'
 type ShotKey = keyof typeof SITE.screenshots
 
 const LABELS: Record<ShotKey, string> = {
+  homepageClips: 'Clips page',
   clips: 'Clips page',
   replay: 'Replay buffer',
   trim: 'Trim editor',
@@ -32,14 +33,6 @@ export function ScreenshotFrame({
 }: ScreenshotFrameProps) {
   return (
     <figure className={`shot-frame ${float ? 'shot-float' : ''} ${className}`}>
-      <div className="flex items-center gap-2 border-b border-ink-border/80 bg-ink/70 px-3 py-2">
-        <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" aria-hidden />
-        <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" aria-hidden />
-        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" aria-hidden />
-        <figcaption className="ml-2 truncate text-[11px] font-medium text-slate-400">
-          SlipUpClipz · {LABELS[shot]}
-        </figcaption>
-      </div>
       <img
         src={SITE.screenshots[shot]}
         alt={alt ?? `SlipUpClipz ${LABELS[shot]} screenshot`}
@@ -48,6 +41,9 @@ export function ScreenshotFrame({
         decoding="async"
         {...imgProps}
       />
+      <figcaption className="border-t border-ink-border/80 px-3 py-2 text-[11px] font-medium text-slate-400">
+        SlipUpClipz · {LABELS[shot]}
+      </figcaption>
     </figure>
   )
 }

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '../components/Button'
 import { MicrosoftStoreButton } from '../components/MicrosoftStoreButton'
 import { SectionHeading } from '../components/SectionHeading'
@@ -6,6 +6,7 @@ import { Seo } from '../components/Seo'
 import { SITE } from '../config/site'
 
 export function DownloadPage() {
+  const [params] = useSearchParams()
   return (
     <>
       <Seo
@@ -14,11 +15,17 @@ export function DownloadPage() {
         path={SITE.paths.download}
       />
       <section className="site-container py-14 sm:py-20">
-        <SectionHeading
+        <SectionHeading as="h1"
           eyebrow="Download"
           title="Get SlipUpClipz for Windows"
           description="Install from the Microsoft Store or grab the latest installer and start clipping in minutes."
         />
+
+        {params.get('preview') === 'installer' ? (
+          <p role="status" className="panel mt-6 p-4 text-sm text-slate-200">
+            The direct installer download is unavailable in the static preview.
+          </p>
+        ) : null}
 
         <div className="mt-10">
           <h2 className="font-display text-xl font-semibold text-white sm:text-2xl">

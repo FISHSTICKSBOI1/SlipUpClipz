@@ -15,10 +15,10 @@ export default {
     extend: {
       colors: {
         ink: {
-          DEFAULT: '#090b12',
-          raised: '#10131c',
-          panel: '#161a27',
-          border: '#2a3148',
+          DEFAULT: '#0d1026',
+          raised: '#121630',
+          panel: '#1b2040',
+          border: '#363d65',
         },
         glow: {
           purple: '#7c5cff',

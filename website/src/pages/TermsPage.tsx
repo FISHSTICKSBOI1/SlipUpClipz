@@ -13,7 +13,6 @@ export function TermsPage() {
       />
       <LegalShell
         title="Terms of Service"
-        updated="Updated October 22, 2026. These terms describe the current product. They do not name a legal entity, a home state, or a court. A lawyer should add those and review this page before publication."
       >
         <p>
           These terms cover the SlipUpClipz Windows application and the website at {SITE.websiteUrl}.
@@ -31,9 +30,9 @@ export function TermsPage() {
         </p>
         <p>
           You may not resell the installer, present it as your own product, or share a Pro license
-          key so other people can activate Pro. The current software does not enforce a numbered
-          device cap. The key is stored on the PC where you activate it and is checked with our
-          license server.
+          key so other people can activate Pro. One Pro license works on one computer at a time.
+          You can remove the license to free that seat, or use the purchase email to transfer it
+          if the old computer is unavailable. Your clips are not deleted when you remove a license.
         </p>
 
         <h2>Subscriptions and renewal</h2>
@@ -106,8 +105,7 @@ export function TermsPage() {
           The app and website are provided as available. To the extent the law allows, SlipUpClipz
           disclaims implied warranties of merchantability, fitness for a particular purpose, and
           non-infringement. Some places do not allow those disclaimers, and in those places they
-          apply only as far as the law permits. A lawyer should review this section before
-          publication.
+          apply only as far as the law permits.
         </p>
         <p>
           To the extent the law allows, SlipUpClipz is not liable for indirect or consequential

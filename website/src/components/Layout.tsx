@@ -1,3 +1,4 @@
+import { scrollToSection, sectionFromHash } from '../lib/scrollToSection'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { SITE } from '../config/site'
@@ -8,8 +9,13 @@ export function Layout() {
   const location = useLocation()
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  }, [location.pathname])
+    const frame = requestAnimationFrame(() => {
+      const id = sectionFromHash(location.hash)
+      if (id) scrollToSection(id)
+      else window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [location.key, location.pathname, location.hash])
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -18,12 +24,11 @@ export function Layout() {
       </a>
       {import.meta.env.DEV ? (
         <p className="bg-amber-500/15 px-4 py-2 text-center text-sm text-amber-100">
-          Local preview of the v{SITE.currentVersion} website. Do not deploy until the GitHub release
-          is published. Until then, the download redirect still serves the previous public installer.
+          Local website preview · v{SITE.currentVersion} · Production is unchanged.
         </p>
       ) : null}
       <Navbar />
-      <main id="main-content" className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <Outlet />
       </main>
       <Footer />

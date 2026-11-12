@@ -73,7 +73,7 @@ export function PricingCards() {
             This button charges the regular annual price.
           </p>
           <Link to={`${SITE.paths.pricing}#feedback`} className="mt-3 text-sm font-semibold text-glow-magenta hover:underline">
-            Take the Survey &amp; Save $1
+            Take the Survey — $1 offer details
           </Link>
         </article>
       </div>

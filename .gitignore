@@ -11,3 +11,7 @@ dist-website/
 *.cer
 # Local Netlify folder
 .netlify
+
+# Isolated website browser QA output
+test-results/
+playwright-report/

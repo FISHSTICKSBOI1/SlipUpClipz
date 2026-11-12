@@ -4,8 +4,7 @@ import { Seo } from '../components/Seo'
 import { SITE } from '../config/site'
 import type { ReactNode } from 'react'
 
-const REVIEW =
-  'Updated October 22, 2026. This describes how SlipUpClipz works today. It does not name a legal entity or mailing address, because those have not been provided. A lawyer should review it before publication.'
+
 
 export function PrivacyPage() {
   return (
@@ -15,7 +14,7 @@ export function PrivacyPage() {
         description="How SlipUpClipz handles clips on your PC, website feedback, Stripe purchases, license checks, and support messages."
         path={SITE.paths.privacy}
       />
-      <LegalShell title="Privacy Policy" updated={REVIEW}>
+      <LegalShell title="Privacy Policy">
         <p>
           This policy covers the SlipUpClipz Windows app and the website at {SITE.websiteUrl}. It
           is written from the current product. It is not a claim that every privacy law has been
@@ -29,8 +28,8 @@ export function PrivacyPage() {
           normal clipping, playback, or AI Voice Clip Cloning.
         </p>
         <p>
-          AI Voice Clip Cloning, when it is in a future Pro release, runs on your computer with a local
-          model. The reference recording and the generated clip stay on that PC. The website does
+          AI Voice Clip Cloning in the Pro Windows installer runs on your computer with a local
+          model. The current Microsoft Store release does not include it. The reference recording and the generated clip stay on that PC. The website does
           not receive your microphone audio. Sample voices played on this website are files we
           host for the product demonstration. They are not recordings from site visitors.
         </p>
@@ -75,8 +74,9 @@ export function PrivacyPage() {
         </p>
         <p>
           We store the answers, the time, and the first 8 characters of a salted hash of your
-          network address. The hash is used to limit submissions to 5 per 24 hours from the same
-          network. We do not publish the answers. They are kept in a private store on our website
+          network address. A full salted hash is used as the private rate-limit key, with submission times,
+          to limit repeat submissions from the same network. A random submission identifier
+          helps us recognize retries of the same submission from the same network. A separate submission can still be saved. We do not publish the answers. They are kept in a private store on our website
           host, Netlify. We have not set a fixed deletion date. Email{' '}
           <a href={`mailto:${SITE.supportEmail}`}>{SITE.supportEmail}</a> to ask for deletion.
         </p>
@@ -112,6 +112,12 @@ export function PrivacyPage() {
           point. See the <Link to={SITE.paths.cookies}>Cookie Policy</Link>.
         </p>
 
+        <p>
+          The website requests font styles and font files from Google Fonts when a page loads.
+          Those requests send your network address and normal browser request information to Google.
+          If the fonts cannot load, the site uses fonts available on your device.
+        </p>
+
         <h2>Analytics and advertising</h2>
         <p>
           The website code does not include a third-party analytics or advertising script. If that
@@ -133,11 +139,6 @@ export function PrivacyPage() {
           hold under their own policies.
         </p>
         <p>
-          A formal privacy program for California or other regions still needs a legal entity, a
-          mailing address, and review by a qualified lawyer. This page describes the practices
-          above. It does not state that SlipUpClipz meets a particular statute.
-        </p>
-        <p>
           Related pages: <Link to={SITE.paths.terms}>Terms</Link>,{' '}
           <Link to={SITE.paths.refund}>Refund Policy</Link>, and{' '}
           <Link to={SITE.paths.cookies}>Cookie Policy</Link>.
@@ -153,12 +154,12 @@ export function LegalShell({
   children,
 }: {
   title: string
-  updated: string
+  updated?: string
   children: ReactNode
 }) {
   return (
     <section className="site-container py-14 sm:py-20">
-      <SectionHeading eyebrow="Legal" title={title} description={updated} />
+      <SectionHeading as="h1" eyebrow="Legal" title={title} description={updated} />
       <div className="prose-legal mt-10 max-w-3xl space-y-5 text-sm leading-relaxed text-slate-300 [&_a]:text-glow-magenta [&_a]:hover:underline [&_code]:text-slate-200 [&_h2]:mt-8 [&_h2]:font-display [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-white [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5">
         {children}
       </div>

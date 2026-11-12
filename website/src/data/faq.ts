@@ -74,7 +74,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'How does the $1 survey discount work?',
     answer:
-      'Complete the short survey on the pricing page, submit it, and then claim the thank-you. That thank-you is $1 off the first year of a new Pro subscription bought through Stripe on this website. If the regular price is $4.99, the first year is $3.99 and later years return to $4.99. The discount applies once, to the first invoice only, and it cannot be applied twice on the same checkout. It does not apply to Microsoft Store purchases. You can buy Pro at the regular price without the survey. If someone already shared a code with you, you can type it on the Stripe checkout page.',
+      'SURVEY20 is the advertised code for $1 off the first year of a new website Pro subscription. Confirm your eligibility and the actual discount in Stripe Checkout before paying. If Stripe applies the offer to a $4.99 annual plan, the first year is $3.99. The regular subscription renews at $4.99/year unless your checkout terms specify otherwise. You can buy Pro at the regular price without taking the survey. This website promotion is not valid for Microsoft Store purchases.',
   },
   {
     question: 'How do automatic updates work?',

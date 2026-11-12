@@ -13,6 +13,9 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
   const quote = usePricingQuote()
   const titleId = useId()
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const submissionId = useRef(crypto.randomUUID())
+  const pendingSubmission = useRef(false)
+  const generation = useRef(0)
   const [startedAt, setStartedAt] = useState(() => Date.now())
   const [heardFrom, setHeardFrom] = useState('')
   const [heardFromOther, setHeardFromOther] = useState('')
@@ -28,6 +31,8 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
   const [open, setOpen] = useState(false)
 
   function resetAnswers() {
+    generation.current += 1
+    submissionId.current = crypto.randomUUID()
     setHeardFrom('')
     setHeardFromOther('')
     setDownloadSource('')
@@ -64,7 +69,9 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (isSubmitting) return
+    if (pendingSubmission.current) return
+    pendingSubmission.current = true
+    const attempt = generation.current
     setError(null)
     setIsSubmitting(true)
 
@@ -72,8 +79,10 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
       const response = await fetch(SITE.surveyEndpoint, {
         method: 'POST',
         credentials: 'same-origin',
+        signal: AbortSignal.timeout(15000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          submissionId: submissionId.current,
           startedAt,
           heardFrom,
           heardFromOther,
@@ -83,14 +92,15 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
           company,
         }),
       })
-      const payload = (await response.json()) as { ok?: boolean; error?: string }
-      if (!response.ok || payload.ok !== true) {
-        throw new Error(payload.error || 'Unable to save feedback right now.')
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || 'We could not confirm that your answers were saved. Please try again.')
       }
-      setStage('thanks')
+      if (attempt === generation.current) setStage('thanks')
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to save feedback right now.')
+      if (attempt === generation.current) setError(submitError instanceof Error ? submitError.message : 'Unable to save feedback right now.')
     } finally {
+      pendingSubmission.current = false
       setIsSubmitting(false)
     }
   }
@@ -137,18 +147,19 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
             compact ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'
           }`}
         >
-          Help Improve SlipUpClipz — Get $1 Off Your First Year of Pro
+          Small survey. Better SlipUpClipz.
         </h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">
-          Answer three short questions. After you submit, you can claim $1 off the first year of
-          Pro. You can still buy Pro at the regular price without taking the survey.
+          Tell us how you found the app and what you would improve. The advertised thank-you offer
+          is $1 off the first year of Pro with SURVEY20, subject to availability at checkout.
+          You can buy Pro at the regular price without taking the survey.
         </p>
         <Button
           type="button"
           className="btn-lift mt-5 min-h-[44px] w-full sm:w-auto"
           onClick={openSurvey}
         >
-          Take the Survey &amp; Save $1
+          Take the Survey
         </Button>
       </div>
 
@@ -208,6 +219,7 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
                     value={heardFromOther}
                     onChange={(event) => setHeardFromOther(event.target.value)}
                     maxLength={80}
+                    aria-label="Other way you heard about SlipUpClipz"
                     placeholder="Where did you hear about it?"
                     className="mt-3 w-full rounded-xl border border-ink-border bg-ink px-3 py-3 text-sm text-white"
                   />
@@ -241,6 +253,7 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
                     value={downloadSourceOther}
                     onChange={(event) => setDownloadSourceOther(event.target.value)}
                     maxLength={80}
+                    aria-label="Other download source"
                     placeholder="Where did you download it?"
                     className="mt-3 w-full rounded-xl border border-ink-border bg-ink px-3 py-3 text-sm text-white"
                   />
@@ -260,7 +273,7 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
                   className="mt-3 w-full rounded-xl border border-ink-border bg-ink px-3 py-3 text-sm text-white"
                 />
                 <span className="mt-2 block text-xs text-slate-500">
-                  A feature, a fix, or anything that would make the app better.
+                  Please do not include names, email addresses, license keys, or other private information.
                 </span>
               </label>
 
@@ -279,9 +292,10 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
               <p className="text-xs leading-relaxed text-slate-500">
                 We store these answers privately so we can see how people find SlipUpClipz and what
                 to build next. We do not ask for your name, email, or payment details. A shortened
-                hash of your network address is kept only to limit repeat submissions. Feedback is
+                hash of your network address is stored with the answers. A full salted hash and
+                submission times are kept separately to limit repeat submissions. Feedback is
                 not published on the site. See the{' '}
-                <Link to={SITE.paths.privacy} className="text-glow-magenta hover:underline">
+                <Link to={SITE.paths.privacy} className="text-glow-magenta hover:underline" onClick={closeSurvey}>
                   Privacy Policy
                 </Link>{' '}
                 for details.
@@ -296,22 +310,22 @@ export function SurveyOffer({ prominence = 'prominent' }: { prominence?: 'compac
               {stage === 'thanks' ? (
                 <>
                   <p className="text-sm leading-relaxed text-slate-200">
-                    Thanks for helping improve SlipUpClipz. You&apos;ve earned $1 off your first year
-                    of Pro.
+                    Your feedback was saved. Thanks for helping improve SlipUpClipz. You can now
+                    view the advertised first-year offer. Check that Stripe applies it before paying.
                   </p>
                   <Button
                     type="button"
                     className="btn-lift min-h-[44px] w-full sm:w-auto"
                     onClick={() => setStage('code')}
                   >
-                    Claim $1 Off Your First Year of Pro
+                    View the $1 first-year offer
                   </Button>
                 </>
               ) : (
                 <div className="space-y-4 rounded-2xl border border-glow-purple/40 bg-ink/50 p-5">
                   <p className="text-sm leading-relaxed text-slate-200">
-                    Here&apos;s {SITE.promotionCode} for $1 off your first year of Pro. Feel free to
-                    share it!
+                    Try {SITE.promotionCode} for the advertised $1 first-year offer. Availability
+                    is confirmed at checkout. Do not pay unless the total is what you expect.
                   </p>
                   <p className="font-display text-3xl font-bold tracking-[0.14em] text-white">
                     {SITE.promotionCode}

@@ -1,3 +1,4 @@
+import { FeatureDemo } from '../components/FeatureDemo'
 import { Link } from 'react-router-dom'
 import { BottomCta } from '../components/BottomCta'
 import { Button } from '../components/Button'
@@ -27,8 +28,8 @@ export function HomePage() {
         path={SITE.paths.home}
       />
 
-      <section className="relative overflow-hidden bg-hero-grid">
-        <div className="site-container grid items-center gap-12 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14 lg:py-24">
+      <section className="hero-section relative overflow-hidden bg-hero-grid">
+        <div className="site-container grid items-center gap-12 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:py-24">
           <div className="motion-safe:animate-fade-up">
             <button
               type="button"
@@ -42,17 +43,17 @@ export function HomePage() {
               <span>AI Voice Clip Cloning</span>
               <span aria-hidden>→</span>
             </button>
-            <p className="max-w-full font-display text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+            <p className="hero-wordmark">
               SlipUpClipz
             </p>
-            <h1 className="mt-6 max-w-xl font-display text-3xl font-bold leading-tight text-slate-50 sm:text-4xl">
-              Capture what they just said. Replay it instantly.
+            <h1 className="hero-headline">
+              Capture what they just said. <span>Replay it instantly.</span>
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
               SlipUpClipz captures the last few seconds of game, Discord, or microphone audio, lets
               you trim the best part, and replay it instantly through your soundboard. Free includes
-              7 pads, global hotkeys, and virtual-cable routing. Pro adds 50 pads. The Windows
-              installer also adds local AI Voice Cloning. The current Microsoft Store release does
+              7 pads, global hotkeys, and virtual-cable routing. Pro adds 50 pads. Pro on the Windows
+              installer also includes local AI Voice Cloning. The current Microsoft Store release does
               not include AI Voice Cloning.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -80,13 +81,20 @@ export function HomePage() {
             </ul>
           </div>
 
+          <div className="hero-visual">
+          <div className="hero-orbit" aria-hidden="true" />
+          <span className="hero-sticker sticker-top" aria-hidden="true">✦ YOU HAD TO BE THERE</span>
           <ScreenshotFrame
-            shot="clips"
-            alt="SlipUpClipz Clips page — full app view with replay buffer and clip library"
+            shot="homepageClips"
+            alt="SlipUpClipz Clips page with the clip library and audio input settings"
+            width={1920}
+            height={991}
             float
             priority
             className="motion-safe:animate-fade-up lg:justify-self-end"
           />
+          <span className="hero-sticker sticker-bottom" aria-hidden="true">↺ NOW YOU CAN REPLAY IT.</span>
+          </div>
         </div>
       </section>
 
@@ -127,7 +135,7 @@ export function HomePage() {
             .map((feature, index) => (
             <article
               key={feature.id}
-              className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12"
+              className="feature-row grid items-center gap-8 lg:grid-cols-2 lg:gap-12"
             >
               <div className={index % 2 === 1 ? 'lg:order-2' : ''}>
                 <h3 className="font-display text-2xl font-bold text-white sm:text-3xl">
@@ -148,12 +156,8 @@ export function HomePage() {
                   See all features →
                 </Link>
               </div>
-              <ScreenshotFrame
-                shot={feature.imageKey}
-                alt={feature.imageAlt}
-                float
-                className={index % 2 === 1 ? 'lg:order-1' : ''}
-              />
+              <FeatureDemo kind={feature.id as 'replay' | 'trim' | 'soundboard'}
+                className={index % 2 === 1 ? 'lg:order-1' : ''} />
             </article>
           ))}
         </div>

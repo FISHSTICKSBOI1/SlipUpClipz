@@ -5,7 +5,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost'
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'bg-gradient-to-r from-glow-purple to-glow-magenta text-white shadow-glow hover:brightness-110',
+    'button-primary text-white shadow-glow hover:brightness-110',
   secondary:
     'border border-ink-border bg-ink-panel/70 text-slate-100 hover:border-glow-purple/60 hover:bg-ink-panel',
   ghost: 'text-slate-300 hover:text-white',

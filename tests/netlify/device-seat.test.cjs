@@ -199,12 +199,13 @@ function installBlobFetch() {
   }
 }
 
-function testBlobStore() {
+function testBlobStore(fetch) {
   const { getStore } = require('@netlify/blobs')
   return getStore('slipupclipz-commerce', {
     siteID: 'site_test',
     token: 'token_test',
     edgeURL: 'https://edge.example.test',
+    fetch,
   })
 }
 
@@ -222,7 +223,7 @@ describe('Netlify Blobs conditional writes', () => {
   it('uses the production store wrapper so only one concurrent claim can create the seat', async () => {
     const blob = installBlobFetch()
     try {
-      const store = wrapBlobStore(testBlobStore(), 'production')
+      const store = wrapBlobStore(testBlobStore, 'production')
       const [first, second] = await Promise.all([
         claimDeviceSeat(store, KEY, COMPUTER_A),
         claimDeviceSeat(store, KEY, COMPUTER_B),
@@ -244,7 +245,7 @@ describe('Netlify Blobs conditional writes', () => {
   it('sends If-Match when replacing a seat through the production wrapper', async () => {
     const blob = installBlobFetch()
     try {
-      const store = wrapBlobStore(testBlobStore(), 'production')
+      const store = wrapBlobStore(testBlobStore, 'production')
       const claimed = await claimDeviceSeat(store, KEY, COMPUTER_A)
       assert.equal(claimed.ok, true)
       const moved = await replaceDeviceSeat(store, KEY, COMPUTER_B)

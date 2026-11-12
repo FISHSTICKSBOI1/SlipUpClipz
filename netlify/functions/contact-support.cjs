@@ -31,9 +31,9 @@ function json(statusCode, body) {
 
 function getClientKey(event) {
   return (
-    event.headers['x-nf-client-connection-ip'] ||
-    event.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-    event.headers['client-ip'] ||
+    (event.headers || {})['x-nf-client-connection-ip'] ||
+    (event.headers || {})['x-forwarded-for']?.split(',')[0]?.trim() ||
+    (event.headers || {})['client-ip'] ||
     'unknown'
   )
 }
@@ -108,6 +108,10 @@ async function handler(event) {
   try {
     body = JSON.parse(event.body || '{}')
   } catch {
+    return json(400, { success: false, error: 'Invalid request.' })
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return json(400, { success: false, error: 'Invalid request.' })
   }
 

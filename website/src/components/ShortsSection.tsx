@@ -26,6 +26,7 @@ export function ShortsSection({ videos = SITE.shorts }: { videos?: readonly Shor
                   {playing ? (
                     <iframe
                       title={video.title || 'SlipUpClipz Short'}
+                      referrerPolicy="strict-origin"
                       src={shortEmbedUrl(video.youtubeId)}
                       className="h-full w-full"
                       loading="lazy"

@@ -208,7 +208,7 @@ describe('survey storage and public SURVEY20 checkout', () => {
       const response = await submitSurvey(post(validBody()))
       assert.equal(response.statusCode, 503)
       const body = JSON.parse(response.body)
-      assert.equal(body.error, 'Survey storage is not configured.')
+      assert.equal(body.error, 'Survey submissions are unavailable on this deployment. Your answers were not saved.')
       assert.equal(JSON.stringify(body).includes('slipupclipz-survey-v1'), false)
     } finally {
       if (previousContext == null) delete process.env.CONTEXT

@@ -1,3 +1,4 @@
+import { SocialIcon } from './SocialIcon'
 import { Link } from 'react-router-dom'
 import { BrandMark } from './BrandMark'
 import { Button } from './Button'
@@ -29,6 +30,7 @@ export function Footer() {
     { label: 'Discord', href: SITE.social.discord },
     { label: 'TikTok', href: SITE.social.tiktok },
     { label: 'YouTube', href: SITE.social.youtube },
+    { label: 'Instagram', href: SITE.social.instagram },
   ].filter((item) => Boolean(item.href))
 
   return (
@@ -73,11 +75,12 @@ export function Footer() {
                 <li key={item.label}>
                   <a
                     href={item.href}
-                    className="text-sm text-slate-300 transition hover:text-white"
+                    className="social-link"
+                    aria-label={`${item.label} (opens in a new tab)`}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                   >
-                    {item.label}
+                    <SocialIcon name={item.label} /> {item.label}
                   </a>
                 </li>
               ))}

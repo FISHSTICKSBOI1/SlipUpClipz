@@ -14,7 +14,7 @@ export function HelpPage() {
         path={SITE.paths.help}
       />
       <section className="site-container py-14 sm:py-20">
-        <SectionHeading
+        <SectionHeading as="h1"
           eyebrow="Help Center"
           title="Find answers fast"
           description="Browse by category or jump into a specific article. Every guide uses simple numbered steps."

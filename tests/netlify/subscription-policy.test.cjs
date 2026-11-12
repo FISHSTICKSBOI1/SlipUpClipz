@@ -289,13 +289,20 @@ describe('annual renewal notices', () => {
 
 describe('billing recovery links', () => {
   function memoryStore() {
-    const data = new Map()
+    const records = new Map()
+    let version = 0
     return {
       async getJSON(key) {
-        return data.has(key) ? structuredClone(data.get(key)) : null
+        return structuredClone(records.get(key)?.data ?? null)
       },
-      async setJSON(key, value) {
-        data.set(key, structuredClone(value))
+      async getWithMetadata(key) {
+        return structuredClone(records.get(key) ?? null)
+      },
+      async setJSON(key, value, options = {}) {
+        const current = records.get(key)
+        if (options.onlyIfNew && current) return { modified: false }
+        if (options.onlyIfMatch && current?.etag !== options.onlyIfMatch) return { modified: false }
+        records.set(key, { data: structuredClone(value), etag: String(++version) })
         return { modified: true }
       },
     }

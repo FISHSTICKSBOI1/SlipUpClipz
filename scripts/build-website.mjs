@@ -1,29 +1,16 @@
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const viteConfig = path.join(root, 'website', 'vite.config.ts')
-const tsconfig = path.join(root, 'website', 'tsconfig.json')
-
-function run(command, args) {
-  const result = spawnSync(command, args, {
-    cwd: root,
-    stdio: 'inherit',
-    shell: true,
-  })
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1)
-  }
+function run(script, args) {
+  const result = spawnSync(process.execPath, [path.join(root, script), ...args], { cwd: root, stdio: 'inherit', shell: false })
+  if (result.error) throw result.error
+  if (result.status !== 0) process.exit(result.status ?? 1)
 }
-
 console.log('[website:build] Exporting support knowledge…')
-run('npx', ['tsx', path.join(root, 'scripts', 'export-support-knowledge.ts')])
-
+run('node_modules/tsx/dist/cli.mjs', ['scripts/export-support-knowledge.ts'])
 console.log('[website:build] Typechecking…')
-run('npx', ['tsc', '-p', tsconfig, '--noEmit'])
-
+run('node_modules/typescript/bin/tsc', ['-p', 'website/tsconfig.json', '--noEmit'])
 console.log('[website:build] Building static site…')
-run('npx', ['vite', 'build', '--config', viteConfig])
-
+run('node_modules/vite/bin/vite.js', ['build', '--config', 'website/vite.config.ts'])
 console.log('[website:build] Output: dist-website/')
