@@ -79,6 +79,7 @@ export const SITE = {
     cookies: '/cookies',
   },
   screenshots: {
+    homepageClips: '/images/screenshots/homepage-clips.png',
     clips: '/images/screenshots/clips-page.png',
     replay: '/images/screenshots/clips-page.png',
     trim: '/images/screenshots/trim-editor.png',

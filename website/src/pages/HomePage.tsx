@@ -85,8 +85,10 @@ export function HomePage() {
           <div className="hero-orbit" aria-hidden="true" />
           <span className="hero-sticker sticker-top" aria-hidden="true">✦ YOU HAD TO BE THERE</span>
           <ScreenshotFrame
-            shot="clips"
-            alt="SlipUpClipz Clips page — full app view with replay buffer and clip library"
+            shot="homepageClips"
+            alt="SlipUpClipz Clips page with the clip library and audio input settings"
+            width={1920}
+            height={991}
             float
             priority
             className="motion-safe:animate-fade-up lg:justify-self-end"

@@ -143,17 +143,21 @@ function clientAddress(event) {
 
 const DEV_SURVEY_IP_SALT = 'slipupclipz-survey-v1'
 
-function requiresPrivateSurveySalt() {
-  const context = String(process.env.CONTEXT || '')
-  // SITE_ID identifies deployed Functions even when build-only CONTEXT is absent.
-  return Boolean(process.env.SITE_ID) || context === 'production' || context === 'deploy-preview' || context === 'branch-deploy'
+function hasSurveyBlobsContext(event) {
+  return Boolean(process.env.SITE_ID || process.env.NETLIFY_BLOBS_CONTEXT ||
+    (typeof event?.blobs === 'string' && event.blobs))
 }
 
-function resolveSurveyIpSalt() {
+function requiresPrivateSurveySalt(event) {
+  return hasSurveyBlobsContext(event) ||
+    ['production', 'deploy-preview', 'branch-deploy'].includes(process.env.CONTEXT)
+}
+
+function resolveSurveyIpSalt(event) {
   const configured = String(process.env.SURVEY_IP_SALT || '').trim()
   if (configured) return configured
-  if (requiresPrivateSurveySalt()) {
-    const error = new Error('Survey storage is not configured.')
+  if (requiresPrivateSurveySalt(event)) {
+    const error = new Error('Survey submissions are unavailable on this deployment. Your answers were not saved.')
     error.statusCode = 503
     error.code = 'survey-salt-missing'
     throw error
@@ -161,9 +165,9 @@ function resolveSurveyIpSalt() {
   return DEV_SURVEY_IP_SALT
 }
 
-function hashClientAddress(address) {
+function hashClientAddress(address, event) {
   const { createHash } = require('node:crypto')
-  const salt = resolveSurveyIpSalt()
+  const salt = resolveSurveyIpSalt(event)
   return createHash('sha256').update(`${salt}:${address}`).digest('hex')
 }
 
@@ -216,6 +220,8 @@ module.exports = {
   clearClaimCookieHeader,
   clientAddress,
   hashClientAddress,
+  hasSurveyBlobsContext,
+  requiresPrivateSurveySalt,
   parseJsonBody,
   summarizeResponses,
 }

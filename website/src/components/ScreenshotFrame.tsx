@@ -4,6 +4,7 @@ import { SITE } from '../config/site'
 type ShotKey = keyof typeof SITE.screenshots
 
 const LABELS: Record<ShotKey, string> = {
+  homepageClips: 'Clips page',
   clips: 'Clips page',
   replay: 'Replay buffer',
   trim: 'Trim editor',

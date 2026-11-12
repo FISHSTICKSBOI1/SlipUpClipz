@@ -2,7 +2,7 @@ const { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkS
 const { join } = require('node:path')
 const { randomBytes, randomUUID, createHash } = require('node:crypto')
 const { connectCommerceBlobs, writeConditionalBlob } = require('./storage.cjs')
-const { CLAIM_TTL_MS, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS } = require('./survey.cjs')
+const { CLAIM_TTL_MS, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS, hasSurveyBlobsContext, requiresPrivateSurveySalt } = require('./survey.cjs')
 
 const STORE_NAME = 'slipupclipz-feedback'
 const DEV_STORE_DIR =
@@ -14,10 +14,6 @@ function loadBlobsModule() {
   } catch {
     return null
   }
-}
-
-function usesProductionBlobs() {
-  return Boolean(process.env.SITE_ID)
 }
 
 function safeKey(key) {
@@ -86,15 +82,26 @@ function createFileStore() {
   }
 }
 
+async function readBlobJSON(store, method, key) {
+  try {
+    return await store[method](key, { type: 'json', consistency: 'strong' })
+  } catch (error) {
+    // The installed Lambda adapter supplies a cached endpoint only. ETag
+    // conditions still protect quota writes and response keys are immutable.
+    if (error?.name !== 'BlobsConsistencyError') throw error
+    return store[method](key, { type: 'json' })
+  }
+}
+
 function wrapBlobStore(createStore) {
   const store = createStore()
   return {
     environment: 'production',
     async getJSON(key) {
-      return store.get(key, { type: 'json', consistency: 'strong' })
+      return readBlobJSON(store, 'get', key)
     },
     async getWithMetadata(key) {
-      return store.getWithMetadata(key, { type: 'json', consistency: 'strong' })
+      return readBlobJSON(store, 'getWithMetadata', key)
     },
     async setJSON(key, value, options = {}) {
       // Verify the actual HTTP outcome; the SDK alone can report failed CAS writes as modified.
@@ -113,9 +120,8 @@ function wrapBlobStore(createStore) {
 }
 
 async function getFeedbackStore(event) {
-  if (event) connectCommerceBlobs(event)
-
-  if (usesProductionBlobs()) {
+  if (hasSurveyBlobsContext(event)) {
+    if (event) connectCommerceBlobs(event)
     const blobs = loadBlobsModule()
     if (!blobs || typeof blobs.getStore !== 'function') {
       throw new Error('Netlify Blobs is required for survey storage in production')
@@ -123,7 +129,7 @@ async function getFeedbackStore(event) {
     return wrapBlobStore((fetch) => blobs.getStore(STORE_NAME, { fetch }))
   }
 
-  if (['production', 'deploy-preview', 'branch-deploy'].includes(process.env.CONTEXT)) {
+  if (requiresPrivateSurveySalt(event)) {
     throw new Error('Deployed survey storage requires a configured Netlify site')
   }
   return createFileStore()
@@ -165,6 +171,7 @@ async function consumeRateLimit(ipHash, event, now = Date.now(), submissionKey =
   const key = `rate:${ipHash}`
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const current = await store.getWithMetadata(key)
+    if (current && !current.etag) throw new Error('Survey quota version is unavailable')
     const hits = (Array.isArray(current?.data?.hits) ? current.data.hits : [])
       .filter((hit) => now - Number(typeof hit === 'number' ? hit : hit.time) < RATE_LIMIT_WINDOW_MS)
     if (submissionKey && hits.some((hit) => hit.id === submissionKey)) return { allowed: true }

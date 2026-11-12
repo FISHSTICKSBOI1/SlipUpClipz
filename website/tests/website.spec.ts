@@ -104,6 +104,8 @@ test('survey validation, saved confirmation, stable retry ID, offer and safe clo
   await dialog.getByLabel('Official Website',{exact:true}).check()
   await dialog.getByRole('button',{name:'Submit feedback'}).click()
   await expect(dialog.getByRole('alert')).toHaveText('Try again')
+  await expect(dialog.getByRole('button', { name: 'View the $1 first-year offer' })).toHaveCount(0)
+  await expect(dialog.getByText('SURVEY20', { exact: true })).toHaveCount(0)
   await dialog.getByRole('button',{name:'Submit feedback'}).click()
   await expect(dialog.getByRole('status')).toContainText('Your feedback was saved')
   expect(requests[0].submissionId).toBe(requests[1].submissionId)
@@ -166,6 +168,14 @@ for (const width of [360,390,768,1024,1440]) {
     for(const path of ['/', '/pricing', '/help', '/contact']) {
       await page.goto(path)
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+      if (path === '/') {
+        const hero = page.locator('.hero-visual img')
+        await expect(hero).toHaveAttribute('src', '/images/screenshots/homepage-clips.png')
+        await expect(hero).toHaveJSProperty('naturalWidth', 1920)
+        await expect(hero).toHaveJSProperty('naturalHeight', 991)
+        const ratio = await hero.evaluate(img => img.clientWidth / img.clientHeight)
+        expect(ratio).toBeCloseTo(1920 / 991, 1)
+      }
     }
     if(width<1024) {
       await page.getByRole('button',{name:'Menu',exact:true}).click()
