@@ -17,7 +17,7 @@ export function MicrosoftStoreButton({
 }: MicrosoftStoreButtonProps) {
   const variantClasses =
     variant === 'primary'
-      ? 'bg-gradient-to-r from-glow-purple to-glow-magenta text-white shadow-glow hover:brightness-110'
+      ? 'button-primary text-white shadow-glow hover:brightness-110'
       : 'border border-ink-border bg-ink-panel/70 text-slate-100 hover:border-glow-purple/60 hover:bg-ink-panel'
 
   return (

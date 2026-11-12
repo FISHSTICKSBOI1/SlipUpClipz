@@ -20,7 +20,7 @@ export function HowItWorksPage() {
 
       <section className="section-space">
         <div className="site-container">
-          <SectionHeading
+          <SectionHeading as="h1"
             eyebrow="How it works"
             title="Capture → Trim → Add → Replay"
             description="Four beats for the soundboard. Pro can also create new speech from a short reference with AI Voice Clip Cloning, with the speaker’s permission."

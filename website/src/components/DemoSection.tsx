@@ -105,9 +105,10 @@ export function DemoSection() {
                 ✕
               </button>
             </div>
-            <div className="relative aspect-video w-full bg-ink">
+            <div className="relative aspect-video min-h-[200px] w-full bg-ink">
               {open && SITE.demoVideoEmbedUrl ? (
                 <iframe
+                  referrerPolicy="strict-origin"
                   src={SITE.demoVideoEmbedUrl}
                   title="SlipUpClipz product demo on YouTube"
                   className="absolute inset-0 h-full w-full"
@@ -116,6 +117,18 @@ export function DemoSection() {
                 />
               ) : null}
             </div>
+            {SITE.demoVideoUrl ? (
+              <div className="border-t border-ink-border/80 px-4 py-3">
+                <a
+                  href={SITE.demoVideoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-white underline underline-offset-4"
+                >
+                  Watch on YouTube
+                </a>
+              </div>
+            ) : null}
           </div>
         </dialog>
 

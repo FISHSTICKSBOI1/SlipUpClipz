@@ -17,7 +17,7 @@ export function ChangelogPage() {
 
       <section className="section-space">
         <div className="site-container">
-          <SectionHeading
+          <SectionHeading as="h1"
             eyebrow="Changelog"
             title="What’s new in SlipUpClipz"
             description="v0.1.6 is the Windows installer. Microsoft Store installs update separately and the current Store release does not include AI Voice Cloning."

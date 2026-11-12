@@ -91,6 +91,7 @@ export function ContactPage() {
     try {
       const response = await fetch(SITE.contactSupportEndpoint, {
         method: 'POST',
+        signal: AbortSignal.timeout(15000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: trimField(form.name),
@@ -156,7 +157,7 @@ export function ContactPage() {
         path={SITE.paths.contact}
       />
       <section className="site-container py-14 sm:py-20">
-        <SectionHeading
+        <SectionHeading as="h1"
           eyebrow="Contact"
           title="Contact Support"
           description="Describe the problem and include your app and Windows versions. We typically reply by email."

@@ -1,7 +1,7 @@
 const { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } = require('node:fs')
 const { join } = require('node:path')
-const { randomBytes, randomUUID } = require('node:crypto')
-const { connectCommerceBlobs } = require('./storage.cjs')
+const { randomBytes, randomUUID, createHash } = require('node:crypto')
+const { connectCommerceBlobs, writeConditionalBlob } = require('./storage.cjs')
 const { CLAIM_TTL_MS, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS } = require('./survey.cjs')
 
 const STORE_NAME = 'slipupclipz-feedback'
@@ -47,9 +47,28 @@ function createFileStore() {
         return null
       }
     },
-    async setJSON(key, value) {
+    async getWithMetadata(key) {
+      const file = devPath(key)
+      if (!existsSync(file)) return null
+      const raw = readFileSync(file, 'utf8')
+      return { data: JSON.parse(raw), etag: createHash('sha256').update(raw).digest('hex') }
+    },
+    async setJSON(key, value, options = {}) {
       ensureDevDir()
-      writeFileSync(devPath(key), JSON.stringify(value), 'utf8')
+      const file = devPath(key)
+      // Synchronous local read/write has no await gap. Production uses provider CAS.
+      if (options.onlyIfMatch) {
+        if (!existsSync(file)) return { modified: false }
+        const etag = createHash('sha256').update(readFileSync(file)).digest('hex')
+        if (etag !== options.onlyIfMatch) return { modified: false }
+      }
+      try {
+        writeFileSync(file, JSON.stringify(value), { encoding: 'utf8', flag: options.onlyIfNew ? 'wx' : 'w' })
+        return { modified: true }
+      } catch (error) {
+        if (options.onlyIfNew && error.code === 'EEXIST') return { modified: false }
+        throw error
+      }
     },
     async delete(key) {
       const filePath = devPath(key)
@@ -67,14 +86,22 @@ function createFileStore() {
   }
 }
 
-function wrapBlobStore(store) {
+function wrapBlobStore(createStore) {
+  const store = createStore()
   return {
     environment: 'production',
     async getJSON(key) {
-      return store.get(key, { type: 'json' })
+      return store.get(key, { type: 'json', consistency: 'strong' })
     },
-    async setJSON(key, value) {
-      await store.setJSON(key, value)
+    async getWithMetadata(key) {
+      return store.getWithMetadata(key, { type: 'json', consistency: 'strong' })
+    },
+    async setJSON(key, value, options = {}) {
+      // Verify the actual HTTP outcome; the SDK alone can report failed CAS writes as modified.
+      if (options.onlyIfNew || options.onlyIfMatch) {
+        return writeConditionalBlob(createStore, key, JSON.stringify(value), options)
+      }
+      return store.set(key, JSON.stringify(value), options)
     },
     async delete(key) {
       await store.delete(key)
@@ -93,9 +120,12 @@ async function getFeedbackStore(event) {
     if (!blobs || typeof blobs.getStore !== 'function') {
       throw new Error('Netlify Blobs is required for survey storage in production')
     }
-    return wrapBlobStore(blobs.getStore(STORE_NAME))
+    return wrapBlobStore((fetch) => blobs.getStore(STORE_NAME, { fetch }))
   }
 
+  if (['production', 'deploy-preview', 'branch-deploy'].includes(process.env.CONTEXT)) {
+    throw new Error('Deployed survey storage requires a configured Netlify site')
+  }
   return createFileStore()
 }
 
@@ -130,30 +160,41 @@ function claimIsOpen(claim, now = Date.now()) {
   return Number.isFinite(expires) && expires > now
 }
 
-async function consumeRateLimit(ipHash, event, now = Date.now()) {
+async function consumeRateLimit(ipHash, event, now = Date.now(), submissionKey = null) {
   const store = await getFeedbackStore(event)
   const key = `rate:${ipHash}`
-  const current = (await store.getJSON(key)) || { hits: [] }
-  const hits = (Array.isArray(current.hits) ? current.hits : []).filter(
-    (hit) => now - Number(hit) < RATE_LIMIT_WINDOW_MS,
-  )
-  if (hits.length >= RATE_LIMIT_MAX) {
-    return { allowed: false }
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const current = await store.getWithMetadata(key)
+    const hits = (Array.isArray(current?.data?.hits) ? current.data.hits : [])
+      .filter((hit) => now - Number(typeof hit === 'number' ? hit : hit.time) < RATE_LIMIT_WINDOW_MS)
+    if (submissionKey && hits.some((hit) => hit.id === submissionKey)) return { allowed: true }
+    if (hits.length >= RATE_LIMIT_MAX) return { allowed: false }
+    const result = await store.setJSON(key, { hits: [...hits, { time: now, id: submissionKey }] },
+      current ? { onlyIfMatch: current.etag } : { onlyIfNew: true })
+    if (result?.modified === true) return { allowed: true }
   }
-  hits.push(now)
-  await store.setJSON(key, { hits })
-  return { allowed: true }
+  return { allowed: false }
 }
 
-async function saveFeedbackResponse({ answers, ipHash, event, now = new Date() }) {
+function feedbackId(submissionId, ipHash) {
+  // New clients get deterministic IDs without storing their request ID or full network hash in answers.
+  return submissionId ? createHash('sha256').update(`${ipHash}:${submissionId}`).digest('hex') : newId()
+}
+
+async function saveFeedbackResponse({ answers, ipHash, submissionId, event, now = new Date() }) {
   const store = await getFeedbackStore(event)
-  const response = {
-    id: newId(),
-    createdAt: now.toISOString(),
-    ...answers,
-    ipHashPrefix: String(ipHash || '').slice(0, 8),
+  const response = { id: feedbackId(submissionId, ipHash), createdAt: now.toISOString(),
+    ...answers, ipHashPrefix: String(ipHash || '').slice(0, 8) }
+  const saved = await store.setJSON(`response:${response.id}`, response, { onlyIfNew: true })
+  if (saved?.modified !== true) {
+    const existing = await store.getJSON(`response:${response.id}`)
+    if (!existing || Object.keys(answers).some(key => existing[key] !== answers[key])) {
+      const error = new Error('This submission was already saved with different answers. Reopen the survey to send new feedback.')
+      error.statusCode = 409
+      throw error
+    }
+    return existing
   }
-  await store.setJSON(`response:${response.id}`, response)
   return response
 }
 
@@ -244,6 +285,8 @@ async function listSurveyResponses(event) {
 
 module.exports = {
   STORE_NAME,
+  feedbackId,
+  wrapBlobStore,
   getFeedbackStore,
   getClaimByToken,
   getClaimById,

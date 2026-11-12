@@ -13,7 +13,6 @@ export function CookiesPage() {
       />
       <LegalShell
         title="Cookie Policy"
-        updated="Updated October 22, 2026. The site does not set analytics or advertising cookies, so it does not show a consent banner for cookies it does not use. A lawyer should confirm that choice for the regions you serve before publication."
       >
         <p>
           This page lists the cookies and similar storage the SlipUpClipz website actually uses. The
@@ -63,11 +62,9 @@ export function CookiesPage() {
 
         <h2>Consent</h2>
         <p>
-          For the cookies this website itself writes, a banner would not change anything you can
-          switch off, because we are not setting optional tracking cookies. Visitors in places with
-          stricter rules, including parts of Europe, may still need a clearer choice before YouTube
-          loads. The player already waits for a click. A lawyer should confirm that is enough for
-          the regions you serve before this site is treated as final.
+          Embedded YouTube players load only after you press play. You can use the rest of the
+          website without loading a player. Third-party sites you choose to open control their own
+          cookies and privacy settings.
         </p>
       </LegalShell>
     </>

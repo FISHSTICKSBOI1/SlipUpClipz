@@ -21,9 +21,6 @@ function localNetlifyFunctions(): Plugin {
     'release-license': '../netlify/functions/release-license.cjs',
     'device-transfer': '../netlify/functions/device-transfer.cjs',
     'device-transfer-confirm': '../netlify/functions/device-transfer-confirm.cjs',
-    'release-license': '../netlify/functions/release-license.cjs',
-    'device-transfer': '../netlify/functions/device-transfer.cjs',
-    'device-transfer-confirm': '../netlify/functions/device-transfer-confirm.cjs',
   }
 
   return {
@@ -112,9 +109,34 @@ function readRequestBody(req: IncomingMessage) {
   })
 }
 
+function staticPreviewResponses(): Plugin {
+  return {
+    name: 'slipupclipz-static-preview',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = req.url?.split('?')[0] ?? ''
+        if (pathname === '/download/latest' || pathname === '/.netlify/functions/download-latest') {
+          res.writeHead(302, { Location: '/download?preview=installer', 'Cache-Control': 'no-store' })
+          res.end()
+          return
+        }
+        if (!pathname.startsWith('/.netlify/functions/')) return next()
+
+        const message = pathname === '/.netlify/functions/submit-survey'
+          ? 'Survey submissions are unavailable in the static preview. Your answers were not saved.'
+          : pathname === '/.netlify/functions/create-checkout'
+            ? 'Checkout is unavailable in the static preview. No payment was started.'
+            : 'This service is unavailable in the static preview.'
+        res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        res.end(JSON.stringify({ error: message }))
+      })
+    },
+  }
+}
+
 export default defineConfig({
   root,
-  plugins: [react(), localNetlifyFunctions()],
+  plugins: [react(), localNetlifyFunctions(), staticPreviewResponses()],
   publicDir: path.join(root, 'public'),
   resolve: {
     alias: {

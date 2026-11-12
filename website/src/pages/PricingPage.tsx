@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ComparisonTable } from '../components/ComparisonTable'
 import { ManageSubscription } from '../components/ManageSubscription'
@@ -9,28 +8,23 @@ import { SectionHeading } from '../components/SectionHeading'
 import { Seo } from '../components/Seo'
 import { BottomCta } from '../components/BottomCta'
 import { SITE } from '../config/site'
-import { scrollToSection } from '../lib/scrollToSection'
 
 export function PricingPage() {
   const [searchParams] = useSearchParams()
   const purchaseStatus = searchParams.get('purchase')
 
-  useEffect(() => {
-    if (window.location.hash !== '#manage') return
-    const frame = window.requestAnimationFrame(() => scrollToSection('manage'))
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
+
 
   return (
     <>
       <Seo
         title="Pricing"
-        description="Download SlipUpClipz Free, or upgrade to Pro. Pro is an annual subscription advertised at $4.99/year. A short survey thanks you with $1 off the first year."
+        description="Download SlipUpClipz Free, or upgrade to Pro. Pro is an annual subscription advertised at $4.99/year. See the survey’s advertised first-year offer and manage your existing subscription."
         path={SITE.paths.pricing}
       />
       <section className="section-space">
         <div className="site-container">
-          <SectionHeading
+          <SectionHeading as="h1"
             align="center"
             eyebrow="Pricing"
             title="Start free. Upgrade to Pro."
@@ -42,7 +36,7 @@ export function PricingPage() {
               className="mx-auto mt-8 max-w-2xl rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-100"
               role="status"
             >
-              Payment received. Check your email for your SlipUpClipz Pro license key.
+              Checkout complete. Once payment is confirmed, your Pro license key will arrive by email.
             </div>
           ) : null}
 
@@ -83,7 +77,7 @@ export function PricingPage() {
             <a href={SITE.paths.refund} className="text-glow-magenta hover:underline">
               Refund Policy
             </a>{' '}
-            for purchase details. The survey thank-you is $1 off the first year of a new website
+            for purchase details. The advertised survey offer is $1 off the first year of a new website
             subscription, and it cannot be applied twice on the same checkout. Pro licenses are
             purchased through Stripe on this site, not through Microsoft Store.
           </p>

@@ -18,12 +18,21 @@ function recoveryKey(token) {
 }
 
 async function consumeRecoveryRateLimit(store, key, now = Date.now(), limit = EMAIL_LIMIT) {
-  const record = (await store.getJSON(key)) || { hits: [] }
-  const hits = (record.hits || []).filter((hit) => now - hit < WINDOW_MS)
-  if (hits.length >= limit) return { allowed: false }
-  hits.push(now)
-  await store.setJSON(key, { hits })
-  return { allowed: true }
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    // Lambda compatibility supplies a cached endpoint. The conditional write
+    // rejects stale versions, so a cached read cannot grant excess quota.
+    const snapshot = await store.getWithMetadata(key)
+    if (snapshot && !snapshot.etag) return { allowed: false }
+
+    const hits = (snapshot?.data?.hits || []).filter((hit) => now - hit < WINDOW_MS)
+    if (hits.length >= limit) return { allowed: false }
+
+    const condition = snapshot ? { onlyIfMatch: snapshot.etag } : { onlyIfNew: true }
+    const result = await store.setJSON(key, { hits: [...hits, now] }, condition)
+    if (result?.modified === true) return { allowed: true }
+    if (result?.modified !== false) throw new Error('Recovery rate write could not be confirmed')
+  }
+  return { allowed: false }
 }
 
 async function issueBillingRecovery({ store, license, now = new Date() }) {
@@ -60,8 +69,20 @@ async function markBillingRecoveryUsed(store, token, now = new Date()) {
   return next
 }
 
+async function claimBillingRecovery(store, token, now = new Date()) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return { ok: false }
+  const key = recoveryKey(token)
+  const snapshot = await store.getWithMetadata(key)
+  const record = snapshot?.data
+  if (!snapshot?.etag || !record?.licenseKey || record.usedAt ||
+      !Number.isFinite(Date.parse(record.expiresAt)) || Date.parse(record.expiresAt) <= now.getTime()) return { ok: false }
+  const result = await store.setJSON(key, { ...record, usedAt: now.toISOString() }, { onlyIfMatch: snapshot.etag })
+  return result?.modified === true ? { ok: true, record } : { ok: false }
+}
+
 module.exports = {
   TOKEN_TTL_MS,
+  claimBillingRecovery,
   EMAIL_LIMIT,
   IP_LIMIT,
   hashToken,

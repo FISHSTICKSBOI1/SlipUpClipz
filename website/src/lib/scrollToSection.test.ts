@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { AI_VOICE_SECTION_ID, scrollBehavior } from './scrollToSection'
+import { AI_VOICE_SECTION_ID, scrollBehavior, sectionFromHash } from './scrollToSection'
 
 describe('scrollToSection', () => {
   it('uses a stable id for the AI Voice Cloning section', () => {
@@ -11,4 +11,11 @@ describe('scrollToSection', () => {
     assert.equal(scrollBehavior(true), 'auto')
     assert.equal(scrollBehavior(false), 'smooth')
   })
+})
+
+it('decodes anchor IDs without CSS selector injection or malformed URL errors', () => {
+  assert.equal(sectionFromHash('#feedback'), 'feedback')
+  assert.equal(sectionFromHash('#hello%20world'), 'hello world')
+  assert.equal(sectionFromHash('#%ZZ'), null)
+  assert.equal(sectionFromHash(''), null)
 })

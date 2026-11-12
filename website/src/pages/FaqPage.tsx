@@ -13,7 +13,7 @@ export function FaqPage() {
         path={SITE.paths.faq}
       />
       <section className="site-container py-14 sm:py-20">
-        <SectionHeading
+        <SectionHeading as="h1"
           eyebrow="FAQ"
           title="Common questions"
           description="Expand a card for a short answer. For deeper steps, visit the Help Center."

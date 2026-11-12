@@ -21,13 +21,13 @@ describe('startProCheckout', () => {
     let requestBody = ''
     globalThis.fetch = async (_input, init) => {
       requestBody = String(init?.body || '')
-      return new Response(JSON.stringify({ url: 'https://checkout.stripe.test/session' }), {
+      return new Response(JSON.stringify({ url: 'https://checkout.stripe.com/session' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     }
     const result = await startProCheckout()
-    assert.equal(result.url, 'https://checkout.stripe.test/session')
+    assert.equal(result.url, 'https://checkout.stripe.com/session')
     assert.equal(requestBody, '{}')
   })
 
@@ -35,13 +35,13 @@ describe('startProCheckout', () => {
     let requestBody = ''
     globalThis.fetch = async (_input, init) => {
       requestBody = String(init?.body || '')
-      return new Response(JSON.stringify({ url: 'https://checkout.stripe.test/discount' }), {
+      return new Response(JSON.stringify({ url: 'https://checkout.stripe.com/discount' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     }
     const result = await startProCheckout({ promotionCode: 'SURVEY20' })
-    assert.equal(result.url, 'https://checkout.stripe.test/discount')
+    assert.equal(result.url, 'https://checkout.stripe.com/discount')
     assert.deepEqual(JSON.parse(requestBody), { promotionCode: 'SURVEY20' })
   })
 
@@ -49,4 +49,16 @@ describe('startProCheckout', () => {
     mockCheckout(500, { error: 'Unable to start checkout' })
     await assert.rejects(() => startProCheckout(), /Unable to start checkout/)
   })
+})
+
+it('rejects non-Stripe, insecure, and credential-bearing redirect URLs', async () => {
+  for (const url of ['https://example.test/', 'http://checkout.stripe.com/', 'https://user@checkout.stripe.com/', 'javascript:alert(1)']) {
+    mockCheckout(200, { url })
+    await assert.rejects(() => startProCheckout(), /unexpected address/)
+  }
+})
+
+it('handles an empty error response without exposing a JSON parsing exception', async () => {
+  globalThis.fetch = async () => new Response(null, { status: 404 })
+  await assert.rejects(() => startProCheckout(), /Unable to start checkout. Please try again later/)
 })

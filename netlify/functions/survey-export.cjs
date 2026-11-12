@@ -42,8 +42,8 @@ exports.handler = async (event) => {
       environment: listed.environment,
       responses: listed.responses,
     })
-  } catch (error) {
-    console.error('survey-export failed', error)
+  } catch {
+    console.error('survey-export failed')
     return jsonResponse(500, { error: 'Unable to read survey responses' })
   }
 }

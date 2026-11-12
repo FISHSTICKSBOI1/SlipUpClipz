@@ -6,7 +6,7 @@ const {
   parseJsonBody,
   clearClaimCookieHeader,
 } = require('../lib/survey.cjs')
-const { consumeRateLimit, saveFeedbackResponse } = require('../lib/feedback-store.cjs')
+const { consumeRateLimit, saveFeedbackResponse, feedbackId } = require('../lib/feedback-store.cjs')
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -21,7 +21,7 @@ exports.handler = async (event) => {
     }
 
     const ipHash = hashClientAddress(clientAddress(event))
-    const rate = await consumeRateLimit(ipHash, event)
+    const rate = await consumeRateLimit(ipHash, event, Date.now(), body.submissionId ? feedbackId(body.submissionId, ipHash) : null)
     if (!rate.allowed) {
       return jsonResponse(429, {
         error: 'Too many survey submissions from this network. You can try again tomorrow.',
@@ -30,6 +30,7 @@ exports.handler = async (event) => {
 
     await saveFeedbackResponse({
       answers: validation.answers,
+      submissionId: body.submissionId,
       ipHash,
       event,
     })
@@ -41,7 +42,7 @@ exports.handler = async (event) => {
     )
   } catch (error) {
     const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500
-    if (statusCode >= 500) console.error('submit-survey failed', error)
+    if (statusCode >= 500) console.error('submit-survey failed', { category: error?.code === 'survey-salt-missing' ? 'configuration' : 'storage', statusCode })
     const reveal = statusCode < 500 || error?.code === 'survey-salt-missing'
     return jsonResponse(statusCode, {
       error: reveal ? error.message || 'Unable to save feedback right now.' : 'Unable to save feedback right now.',

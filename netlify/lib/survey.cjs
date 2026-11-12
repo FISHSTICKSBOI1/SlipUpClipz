@@ -30,6 +30,14 @@ function validateSurveySubmission(body, now = Date.now()) {
     return { ok: false, error: 'Unable to submit this survey.', spam: true }
   }
 
+  if (body.submissionId != null && (typeof body.submissionId !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.submissionId))) {
+    return { ok: false, error: 'Invalid submission identifier. Reopen the survey and try again.' }
+  }
+  for (const field of ['feedback', 'heardFromOther', 'downloadSourceOther']) {
+    if (body[field] != null && typeof body[field] !== 'string') return { ok: false, error: 'Invalid survey answer.' }
+  }
+
   const startedAt = Number(body.startedAt)
   if (!Number.isFinite(startedAt) || now - startedAt < LIMITS.minFillMs) {
     return {
@@ -137,7 +145,8 @@ const DEV_SURVEY_IP_SALT = 'slipupclipz-survey-v1'
 
 function requiresPrivateSurveySalt() {
   const context = String(process.env.CONTEXT || '')
-  return context === 'production' || context === 'deploy-preview' || context === 'branch-deploy'
+  // SITE_ID identifies deployed Functions even when build-only CONTEXT is absent.
+  return Boolean(process.env.SITE_ID) || context === 'production' || context === 'deploy-preview' || context === 'branch-deploy'
 }
 
 function resolveSurveyIpSalt() {

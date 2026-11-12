@@ -20,7 +20,6 @@ function emailHash(email) {
 }
 
 exports.handler = async (event) => {
-  connectCommerceBlobs(event)
   if (event.httpMethod !== 'POST') {
     return jsonResponse(405, { error: 'Method not allowed' })
   }
@@ -32,7 +31,7 @@ exports.handler = async (event) => {
     return jsonResponse(400, { error: 'Invalid request.' })
   }
 
-  const email = String(body.email || '').trim().toLowerCase()
+  const email = String(body?.email || '').trim().toLowerCase()
   const generic = {
     ok: true,
     message: 'If that email has a website Pro subscription, we sent a link that expires in 60 minutes.',
@@ -41,21 +40,23 @@ exports.handler = async (event) => {
     return jsonResponse(200, generic)
   }
 
-  const store = await getCommerceStore()
-  const ipAllowed = await consumeRecoveryRateLimit(
-    store,
-    `billing-recovery-rate:ip:${emailHash(clientAddress(event))}`,
-    Date.now(),
-    IP_LIMIT,
-  )
-  const emailAllowed = await consumeRecoveryRateLimit(
-    store,
-    `billing-recovery-rate:email:${emailHash(email)}`,
-    Date.now(),
-    EMAIL_LIMIT,
-  )
-  if (!ipAllowed.allowed || !emailAllowed.allowed) {
-    return jsonResponse(429, { error: 'Too many requests. Try again tomorrow.' })
+  let store
+  const limited = () => jsonResponse(429, { error: 'Too many requests. Try again tomorrow.' })
+  try {
+    connectCommerceBlobs(event)
+    store = await getCommerceStore()
+    const ipAllowed = await consumeRecoveryRateLimit(
+      store, `billing-recovery-rate:ip:${emailHash(clientAddress(event))}`, Date.now(), IP_LIMIT,
+    )
+    if (!ipAllowed.allowed) return limited()
+
+    const emailAllowed = await consumeRecoveryRateLimit(
+      store, `billing-recovery-rate:email:${emailHash(email)}`, Date.now(), EMAIL_LIMIT,
+    )
+    if (!emailAllowed.allowed) return limited()
+  } catch {
+    console.error('[billing-recovery] Rate limit storage unavailable')
+    return jsonResponse(503, { error: 'Management email is temporarily unavailable.' })
   }
 
   const license = await getLicenseByEmail(email)

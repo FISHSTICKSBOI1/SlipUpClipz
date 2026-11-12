@@ -56,8 +56,9 @@ export const SITE = {
     introDiscountLabel: '$1 off the first year',
   },
   social: {
-    tiktok: '',
-    youtube: '',
+    tiktok: 'https://www.tiktok.com/@slipupclipz.com',
+    youtube: 'https://www.youtube.com/@SlipUpClipz',
+    instagram: 'https://www.instagram.com/slipupclipz/',
     youtubeChannelName: 'Slipupclipz',
     /** Hidden until a new invite is verified. The previous invite returned Discord error 10006. */
     discord: '',

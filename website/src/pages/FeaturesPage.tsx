@@ -17,7 +17,7 @@ export function FeaturesPage() {
 
       <section className="section-space">
         <div className="site-container">
-          <SectionHeading
+          <SectionHeading as="h1"
             eyebrow="Features"
             title="Everything you need to clip and replay the moment"
             description="Clip the moment, trim it, and replay it from the soundboard. Pro adds local AI Voice Clip Cloning."

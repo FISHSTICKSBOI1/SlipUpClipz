@@ -1,98 +1,113 @@
-import { useEffect, useId, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { BrandMark } from './BrandMark'
 import { Button } from './Button'
 import { SITE } from '../config/site'
 
-const NAV = [
-  { to: SITE.paths.features, label: 'Features' },
-  { to: SITE.paths.howItWorks, label: 'How It Works' },
-  { to: SITE.paths.pricing, label: 'Pricing' },
-  { to: SITE.paths.help, label: 'Help' },
-  { to: SITE.paths.changelog, label: 'Changelog' },
+const GROUPS = [
+  { label: 'Explore', note: 'One moment. Endless replays.', links: [
+    { to: SITE.paths.features, label: 'Features', detail: 'Clipping, soundboard, effects & more', icon: '✦' },
+    { to: SITE.paths.howItWorks, label: 'How it works', detail: 'From first capture to instant replay', icon: '↗' },
+    { to: '/#ai-voice-cloning', label: 'Local AI Voice Cloning', detail: 'Windows installer · Pro · NVIDIA GPU', icon: '≈' },
+    { to: '/#demo', label: 'Watch the demo', detail: 'See the real app in action', icon: '▷' },
+  ] },
+  { label: 'Resources', note: 'Get set up. Get back to the game.', links: [
+    { to: SITE.paths.help, label: 'Help Center', detail: 'Setup guides & troubleshooting', icon: '?' },
+    { to: SITE.paths.faq, label: 'FAQ', detail: 'Quick answers to common questions', icon: '↳' },
+    { to: SITE.paths.changelog, label: 'Changelog', detail: 'What’s new in SlipUpClipz', icon: '↻' },
+    { to: SITE.paths.contact, label: 'Contact Support', detail: 'A little help when you need it', icon: '✉' },
+  ] },
 ] as const
 
 export function Navbar() {
-  const [open, setOpen] = useState(false)
-  const menuId = useId()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [active, setActive] = useState<string | null>(null)
+  const header = useRef<HTMLElement>(null)
+  const mobileButton = useRef<HTMLButtonElement>(null)
+  const triggers = useRef<Record<string, HTMLButtonElement | null>>({})
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const id = useId()
+  const location = useLocation()
+  function clearTimer() { clearTimeout(timer.current) }
+  function close() { clearTimer(); setActive(null); setMobileOpen(false) }
 
+  useEffect(() => { close() }, [location.key])
   useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : ''
+    function outside(event: PointerEvent) {
+      if (!header.current?.contains(event.target as Node)) close()
+    }
+    function resize() { close() }
+    document.addEventListener('pointerdown', outside)
+    window.addEventListener('resize', resize)
     return () => {
-      document.body.style.overflow = ''
+      clearTimer()
+      document.removeEventListener('pointerdown', outside)
+      window.removeEventListener('resize', resize)
     }
-  }, [open])
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  return (
-    <header className="sticky top-0 z-50 border-b border-ink-border/60 bg-ink/70 backdrop-blur-xl">
-      <div className="site-container flex min-h-[4.25rem] items-center justify-between gap-4">
+  useEffect(() => {
+    function escape(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || (!active && !mobileOpen)) return
+      event.preventDefault(); clearTimer()
+      if (active) { triggers.current[active]?.focus(); setActive(null) }
+      else { setMobileOpen(false); mobileButton.current?.focus() }
+    }
+    document.addEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  }, [active, mobileOpen])
+
+  return (<>
+    <header ref={header} className="site-header" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node)) close()
+    }}>
+      <div className="site-container nav-shell">
         <BrandMark />
-
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  isActive
-                    ? 'bg-ink-panel text-white'
-                    : 'text-slate-400 hover:bg-ink-panel/60 hover:text-white'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="hidden lg:block">
-          <Button href={SITE.downloadUrl} className="btn-lift !py-2.5 !text-xs">
-            Download for Windows
-          </Button>
-        </div>
-
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-lg border border-ink-border px-3 py-2 text-sm text-slate-200 transition hover:bg-ink-panel lg:hidden"
-          aria-expanded={open}
-          aria-controls={menuId}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? 'Close' : 'Menu'}
+        <button ref={mobileButton} type="button" className="nav-mobile-toggle" aria-expanded={mobileOpen}
+          aria-controls={id} onClick={() => { setMobileOpen(!mobileOpen); setActive(null) }}>
+          {mobileOpen ? 'Close menu' : 'Menu'} <span aria-hidden>{mobileOpen ? '×' : '☰'}</span>
         </button>
-      </div>
-
-      <div
-        id={menuId}
-        className={`overflow-hidden border-t border-ink-border bg-ink-raised transition-[max-height,opacity] duration-300 lg:hidden ${
-          open ? 'max-h-96 opacity-100' : 'pointer-events-none max-h-0 opacity-0'
-        }`}
-      >
-        <nav className="site-container flex flex-col gap-1 py-4" aria-label="Mobile">
-          {NAV.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="rounded-lg px-3 py-3 text-sm font-medium text-slate-200 hover:bg-ink-panel"
-              onClick={() => setOpen(false)}
-            >
-              {item.label}
-            </Link>
+        <nav id={id} className={`primary-nav ${mobileOpen ? 'is-open' : ''}`} aria-label="Primary">
+          {GROUPS.map((group, index) => (
+            <div key={group.label} className="nav-group" onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse' && window.matchMedia('(min-width: 1024px)').matches) {
+                clearTimer(); setActive(group.label)
+              }
+            }} onPointerLeave={() => {
+              clearTimer()
+              timer.current = setTimeout(() => {
+                if (!triggers.current[group.label]?.parentElement?.contains(document.activeElement)) setActive(null)
+              }, 160)
+            }}>
+              <button ref={(el) => { triggers.current[group.label] = el }} type="button" className="nav-link"
+                aria-expanded={active === group.label} aria-controls={`${id}-${index}`}
+                onClick={() => { clearTimer(); setActive(active === group.label ? null : group.label) }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault(); clearTimer(); setActive(group.label)
+                    requestAnimationFrame(() => document.getElementById(`${id}-${index}`)?.querySelector('a')?.focus())
+                  }
+                }}>
+                {group.label} <span className="nav-chevron" aria-hidden>⌄</span>
+              </button>
+              <div id={`${id}-${index}`} className="nav-dropdown" hidden={active !== group.label}>
+                <p className="nav-note">{group.note}</p>
+                <div className="nav-destinations">
+                  {group.links.map((link) => <Link key={link.to} to={link.to} onClick={close}>
+                    <span className="nav-icon" aria-hidden>{link.icon}</span>
+                    <span><strong>{link.label}</strong><small>{link.detail}</small></span>
+                    <span aria-hidden>↗</span>
+                  </Link>)}
+                </div>
+              </div>
+            </div>
           ))}
-          <Button href={SITE.downloadUrl} className="btn-lift mt-2">
-            Download for Windows
-          </Button>
+          <NavLink to={SITE.paths.pricing} className="nav-link" onClick={close}>Pricing</NavLink>
+          <Link to={`${SITE.paths.pricing}#manage`} className="nav-link" onClick={close}>Manage Pro</Link>
+          <Button href={SITE.downloadUrl} className="nav-download">Download for Windows <span aria-hidden>↓</span></Button>
         </nav>
       </div>
     </header>
-  )
+    {(active || mobileOpen) && <div className="nav-backdrop" aria-hidden="true" />}
+  </>)
 }
