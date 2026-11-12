@@ -97,3 +97,95 @@ describe('support knowledge plans', () => {
     assert.doesNotMatch(text, /Global hotkeys require Pro/)
   })
 })
+
+// Offline Stripe doubles only: these regressions never use account credentials.
+describe('live SURVEY20 resolution', () => {
+  const { beforeEach, afterEach } = require('node:test')
+  const { resolvePublicPromotionCode } = require('../../netlify/lib/intro-discount.cjs')
+  const names = ['STRIPE_INTRO_COUPON_ID', 'STRIPE_SURVEY_PROMOTION_CODE_ID', 'STRIPE_AFFILIATE_COUPON_ID']
+  let previous
+  beforeEach(() => {
+    previous = names.map((name) => process.env[name])
+    names.forEach((name) => delete process.env[name])
+  })
+  afterEach(() => names.forEach((name, index) => {
+    if (previous[index] === undefined) delete process.env[name]
+    else process.env[name] = previous[index]
+  }))
+  function mock(overrides = {}) {
+    const coupon = { id: 'coupon_existing', valid: true, amount_off: 100, currency: 'usd', duration: 'once', ...overrides }
+    const promotion = { id: 'promo_existing', code: 'SURVEY20', active: true, coupon }
+    const calls = []
+    const stripe = {
+      coupons: { retrieve: async (id) => { calls.push(['coupon', id]); return coupon },
+        create: async () => assert.fail('must never create live coupons') },
+      promotionCodes: {
+        list: async (params) => { calls.push(['list', params]); return { data: [promotion] } },
+        retrieve: async (id) => { calls.push(['retrieve', id]); return promotion },
+        create: async () => assert.fail('must never create live promotions'),
+      },
+    }
+    return { stripe, coupon, promotion, calls }
+  }
+  it('discovers only active existing promotions without a coupon environment variable', async () => {
+    const { stripe, promotion, calls } = mock()
+    assert.equal(await resolvePublicPromotionCode(stripe, 'sk_live_offline_fixture'), promotion)
+    assert.deepEqual(calls, [['list', { code: 'SURVEY20', active: true, limit: 2 }]])
+  })
+  it('uses an explicit promo ID and validates its coupon, ignoring unrelated legacy/affiliate coupons', async () => {
+    process.env.STRIPE_SURVEY_PROMOTION_CODE_ID = 'promo_existing'
+    process.env.STRIPE_INTRO_COUPON_ID = 'coupon_legacy'
+    process.env.STRIPE_AFFILIATE_COUPON_ID = 'coupon_affiliate'
+    const { stripe, promotion, calls } = mock()
+    promotion.coupon = 'coupon_existing'
+    await resolvePublicPromotionCode(stripe, 'rk_live_offline_fixture')
+    assert.deepEqual(calls, [['retrieve', 'promo_existing'], ['coupon', 'coupon_existing']])
+  })
+  it('keeps the annual price unchanged and applies a fixed first-invoice-only discount once', async () => {
+    const { stripe, coupon } = mock()
+    const promo = await resolvePublicPromotionCode(stripe, 'sk_live_offline_fixture')
+    const params = buildCheckoutSessionParams({ siteUrl: 'https://example.test', priceId: 'price_existing_499', promotionCodeId: promo.id })
+    assert.deepEqual(params.line_items, [{ price: 'price_existing_499', quantity: 1 }])
+    assert.deepEqual(params.discounts, [{ promotion_code: promo.id }])
+    assert.equal(params.allow_promotion_codes, undefined)
+    assert.equal(499 - coupon.amount_off, 399)
+    assert.equal(coupon.duration, 'once') // Stripe applies no discount on subsequent invoices.
+  })
+  for (const [label, change] of Object.entries({ expired: { valid: false }, uncertain: { valid: undefined }, repeating: { duration: 'repeating' }, forever: { duration: 'forever' }, percentage: { percent_off: 20 }, amount: { amount_off: 200 }, currency: { currency: 'eur' } })) {
+    it(`rejects ${label} coupons`, async () => {
+      await assert.rejects(resolvePublicPromotionCode(mock(change).stripe, 'sk_live_offline_fixture'), { code: 'intro-coupon-not-configured' })
+    })
+  }
+  it('fails closed when missing, inactive, ambiguous, wrong-code or malformed promotions are returned', async () => {
+    for (const kind of ['missing', 'inactive', 'ambiguous', 'wrong-code', 'malformed']) {
+      const { stripe, promotion } = mock()
+      if (kind === 'missing') stripe.promotionCodes.list = async () => ({ data: [] })
+      if (kind === 'inactive') promotion.active = false
+      if (kind === 'ambiguous') stripe.promotionCodes.list = async () => ({ data: [promotion, { ...promotion, id: 'promo_other' }] })
+      if (kind === 'wrong-code') promotion.code = 'OTHER'
+      if (kind === 'malformed') delete promotion.coupon
+      await assert.rejects(resolvePublicPromotionCode(stripe, 'sk_live_offline_fixture'), { code: 'intro-coupon-not-configured' })
+    }
+  })
+  it('propagates lookup failure without falling back to coupon or promotion creation', async () => {
+    const { stripe } = mock()
+    stripe.promotionCodes.list = async () => { throw new Error('lookup unavailable') }
+    await assert.rejects(resolvePublicPromotionCode(stripe, 'sk_live_offline_fixture'), /lookup unavailable/)
+  })
+  it('retains test-mode-only creation when no promotion exists', async () => {
+    const { stripe } = mock()
+    stripe.promotionCodes.list = async () => ({ data: [] })
+    stripe.coupons.retrieve = async () => { throw Object.assign(new Error('missing'), { code: 'resource_missing' }) }
+    stripe.coupons.create = async (params) => {
+      assert.equal(params.amount_off, 100)
+      assert.equal(params.duration, 'once')
+      return { ...params, valid: true }
+    }
+    stripe.promotionCodes.create = async (params) => {
+      assert.equal(params.code, 'SURVEY20')
+      assert.equal(params.coupon, 'slipupclipz_survey_first_year_1usd')
+      return { ...params, id: 'promo_test' }
+    }
+    assert.equal((await resolvePublicPromotionCode(stripe, 'sk_test_offline_fixture')).id, 'promo_test')
+  })
+})
