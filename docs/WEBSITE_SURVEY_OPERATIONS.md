@@ -18,4 +18,4 @@ Netlify documents this UI under [Netlify Blobs UI](https://docs.netlify.com/buil
 
 ## Evidence boundary
 
-The user reported a successful live survey submission. The reviewed deployed source returns success only after the save path succeeds. Offline tests cover successful persistence, missing salt, storage failure, retries and conditional-write conflicts. The specific live record has **not** been independently inspected in this task. A public pricing quote cannot establish storage or promotion validity. The dashboard check above is the remaining direct confirmation.
+The operator now confirms the live survey response was successfully saved in production Netlify Blobs. The reviewed deployed source returns success only after the save path succeeds. Offline tests cover successful persistence, missing salt, storage failure, retries and conditional-write conflicts. The specific live record has **not** been independently inspected in this task. A public pricing quote cannot establish storage or promotion validity. The dashboard instructions above remain available for private operator access; do not repeat the already completed confirmation unnecessarily.

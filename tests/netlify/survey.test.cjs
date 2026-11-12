@@ -56,6 +56,7 @@ function fakeStripe() {
   const calls = []
   return {
     calls,
+    prices: { async retrieve(id) { return { id, active: true, unit_amount: 499, currency: 'usd', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' }, billing_scheme: 'per_unit', product: 'prod_pro', livemode: process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') } } },
     coupons: {
       async retrieve(id) {
         calls.push({ type: 'retrieve-coupon', id })
@@ -87,7 +88,7 @@ function fakeStripe() {
       sessions: {
         async create(params) {
           calls.push({ type: 'create-session', params })
-          return { id: `cs_${calls.length}`, url: 'https://checkout.stripe.test/session', status: 'open' }
+          return { id: `cs_${calls.length}`, url: 'https://checkout.stripe.test/session', status: 'open', mode: 'subscription', currency: 'usd', amount_subtotal: 499, amount_total: 399, total_details: { amount_discount: 100, amount_tax: 0, amount_shipping: 0 }, discounts: params.discounts, line_items: { has_more: false, data: [{ quantity: 1, price: { id: params.line_items[0].price }, currency: 'usd', amount_subtotal: 499, amount_discount: 100, amount_tax: 0, amount_total: 399 }] } }
         },
         async retrieve(id) {
           calls.push({ type: 'retrieve-session', id })
@@ -199,6 +200,46 @@ describe('survey storage and public SURVEY20 checkout', () => {
     assert.deepEqual(session.line_items, [{ price: 'price_live_untouched', quantity: 1 }])
     assert.deepEqual(session.discounts, [{ promotion_code: 'promo_survey20' }])
     assert.equal(session.allow_promotion_codes, undefined)
+  })
+
+  it('supports the existing percentage shape only after Stripe confirms the session totals', async () => {
+    process.env.STRIPE_PRICE_ID = 'price_test_annual'
+    process.env.STRIPE_SECRET_KEY = 'sk_test_local_only'
+    delete process.env.STRIPE_SURVEY_PROMOTION_CODE_ID
+    const stripe = fakeStripe()
+    stripe.coupons.retrieve = async () => ({ id: 'coupon_percent', valid: true, duration: 'once', percent_off: 20, amount_off: null, currency: null, applies_to: { products: ['prod_pro'] } })
+    const response = await createCheckoutSession(post({ promotionCode: 'SURVEY20', quantity: 2 }), { stripe })
+    assert.equal(response.statusCode, 200)
+    const params = stripe.calls.find(c => c.type === 'create-session').params
+    assert.equal(params.line_items[0].quantity, 1)
+    assert.deepEqual(params.expand, ['line_items'])
+    assert.equal(params.discounts.length, 1)
+    assert.equal(params.allow_promotion_codes, undefined)
+  })
+
+  it('withholds an incorrect checkout URL and expires the session even when expiration fails', async () => {
+    for (const expirationFails of [false, true]) {
+      const stripe = fakeStripe()
+      const create = stripe.checkout.sessions.create
+      stripe.checkout.sessions.create = async params => ({ ...await create(params), amount_total: 400 })
+      let expired = false
+      stripe.checkout.sessions.expire = async id => { assert.match(id, /^cs_/); expired = true; if (expirationFails) throw new Error('unavailable') }
+      const response = await createCheckoutSession(post({ promotionCode: 'SURVEY20' }), { stripe })
+      assert.equal(response.statusCode, 503)
+      assert.equal(JSON.parse(response.body).url, undefined)
+      assert.equal(expired, true)
+    }
+  })
+
+  it('rejects wrong price and ineligible coupon before creating a session', async () => {
+    for (const kind of ['price', 'product']) {
+      const stripe = fakeStripe()
+      if (kind === 'price') stripe.prices.retrieve = async () => ({ unit_amount: 500 })
+      else stripe.coupons.retrieve = async () => ({ id: 'coupon', valid: true, duration: 'once', amount_off: 100, currency: 'usd', applies_to: { products: ['prod_other'] } })
+      const response = await createCheckoutSession(post({ promotionCode: 'SURVEY20' }), { stripe })
+      assert.equal(response.statusCode, 503)
+      assert.equal(stripe.calls.some(c => c.type === 'create-session'), false)
+    }
   })
 
   it('refuses survey storage in production when the private IP salt is missing', async () => {

@@ -1,5 +1,5 @@
 /**
- * First-year survey discount. $1.00 off the first subscription invoice only.
+ * First-year survey offer: $3.99 on the $4.99 annual price, first invoice only.
  * Renewals stay on the configured annual Stripe price. This module never
  * creates a coupon when the secret key is a live key.
  */
@@ -69,15 +69,21 @@ function describeStripePrice(price) {
   }
 }
 
-function assertIntroCoupon(coupon) {
+function assertIntroCoupon(coupon, price) {
   if (!coupon || coupon.valid !== true) {
     return 'The introductory coupon is missing or no longer active.'
   }
   if (coupon.duration !== 'once') {
     return 'The introductory coupon must use duration "once" so yearly renewals stay at full price.'
   }
+  if (price && coupon.applies_to && !coupon.applies_to.products?.includes(typeof price.product === 'string' ? price.product : price.product?.id)) {
+    return 'The introductory coupon is not eligible for the configured Pro product.'
+  }
   if (coupon.percent_off != null) {
-    return 'The introductory coupon must be a fixed amount, not a percent off.'
+    if (coupon.percent_off !== 20 || coupon.amount_off != null || coupon.currency != null || !price || offerPriceProblem(price)) {
+      return 'The percentage offer must be exactly 20% off the verified $4.99 USD annual Pro price.'
+    }
+    return null // Stripe session totals must still confirm the actual cent rounding.
   }
   if (coupon.amount_off !== INTRO_DISCOUNT_CENTS || coupon.currency !== 'usd') {
     return 'The introductory coupon must be exactly $1.00 USD off.'
@@ -143,7 +149,7 @@ function couponIdFromPromotion(promotionCode) {
   return typeof coupon === 'string' ? coupon : coupon.id || ''
 }
 
-async function assertPromotionCoupon(stripe, promotionCode) {
+async function assertPromotionCoupon(stripe, promotionCode, price) {
   if (!promotionCode?.id || promotionCode.active !== true) {
     throw couponError('SURVEY20 is not an active promotion code.')
   }
@@ -153,7 +159,7 @@ async function assertPromotionCoupon(stripe, promotionCode) {
     promotionCode?.coupon && typeof promotionCode.coupon !== 'string'
       ? promotionCode.coupon
       : await stripe.coupons.retrieve(couponId)
-  const problem = assertIntroCoupon(coupon)
+  const problem = assertIntroCoupon(coupon, price)
   if (problem) throw couponError(problem)
   if (String(promotionCode.code || '').toUpperCase() !== PUBLIC_PROMOTION_CODE) {
     throw couponError('The configured promotion code is not SURVEY20.')
@@ -161,11 +167,11 @@ async function assertPromotionCoupon(stripe, promotionCode) {
   return promotionCode
 }
 
-async function resolvePublicPromotionCode(stripe, secretKey) {
+async function resolvePublicPromotionCode(stripe, secretKey, price) {
   // An existing promotion owns its coupon; no separate coupon setting is needed.
   const configuredId = String(process.env.STRIPE_SURVEY_PROMOTION_CODE_ID || '').trim()
   if (configuredId) {
-    return assertPromotionCoupon(stripe, await stripe.promotionCodes.retrieve(configuredId))
+    return assertPromotionCoupon(stripe, await stripe.promotionCodes.retrieve(configuredId), price)
   }
 
   const listed = await stripe.promotionCodes.list({
@@ -177,7 +183,7 @@ async function resolvePublicPromotionCode(stripe, secretKey) {
     throw couponError('Multiple active SURVEY20 promotions exist. Configure STRIPE_SURVEY_PROMOTION_CODE_ID explicitly.')
   }
   const existing = listed?.data?.[0]
-  if (existing) return assertPromotionCoupon(stripe, existing)
+  if (existing) return assertPromotionCoupon(stripe, existing, price)
 
   if (isLiveSecretKey(secretKey)) {
     throw couponError(
@@ -199,6 +205,33 @@ async function resolvePublicPromotionCode(stripe, secretKey) {
       shareable: 'true',
     },
   })
+}
+
+function offerPriceProblem(price) {
+  if (!price?.id || price.active !== true || price.currency !== 'usd' || price.unit_amount !== 499 ||
+      price.recurring?.interval !== 'year' || price.recurring?.interval_count !== 1 ||
+      price.recurring?.usage_type !== 'licensed' || price.billing_scheme !== 'per_unit' ||
+      price.transform_quantity != null || price.tax_behavior === 'inclusive' || !price.product) {
+    return 'The survey offer requires the active $4.99 USD yearly Pro price without quantity transforms.'
+  }
+  return null
+}
+
+function assertOfferSession(session, priceId, promotionId) {
+  const lines = session?.line_items
+  const line = lines?.data?.[0]
+  const discount = session?.discounts?.[0]
+  const appliedId = typeof discount?.promotion_code === 'string' ? discount.promotion_code : discount?.promotion_code?.id
+  const tax = session?.total_details?.amount_tax
+  if (session?.mode !== 'subscription' || session.status !== 'open' || session.currency !== 'usd' ||
+      session.amount_subtotal !== 499 || session.total_details?.amount_discount !== 100 ||
+      session.total_details?.amount_shipping !== 0 || !Number.isSafeInteger(tax) || tax < 0 ||
+      session.amount_total !== 399 + tax || session.discounts?.length !== 1 || appliedId !== promotionId ||
+      lines?.has_more !== false || lines.data.length !== 1 || line?.quantity !== 1 || line.price?.id !== priceId ||
+      line.currency !== 'usd' || line.amount_subtotal !== 499 || line.amount_discount !== 100 ||
+      line.amount_tax !== tax || line.amount_total !== 399 + tax || !session.url) {
+    throw couponError('Stripe could not confirm the $3.99 first-year survey offer. No checkout link was issued.')
+  }
 }
 
 function requestedPromotionCode(body) {
@@ -241,6 +274,8 @@ function buildCheckoutSessionParams({ siteUrl, priceId, promotionCodeId }) {
 }
 
 module.exports = {
+  offerPriceProblem,
+  assertOfferSession,
   INTRO_DISCOUNT_CENTS,
   ADVERTISED_ANNUAL_CENTS,
   TEST_COUPON_ID,

@@ -44,7 +44,7 @@ describe('introductory discount math', () => {
     assert.match(assertIntroCoupon({ amount_off: 100, currency: 'usd', duration: 'forever', valid: true }), /once/)
     assert.match(
       assertIntroCoupon({ amount_off: 100, currency: 'usd', duration: 'once', percent_off: 10, valid: true }),
-      /fixed amount/,
+      /exactly 20%/,
     )
     assert.match(assertIntroCoupon({ amount_off: 250, currency: 'usd', duration: 'once', valid: true }), /\$1\.00/)
   })
@@ -187,5 +187,38 @@ describe('live SURVEY20 resolution', () => {
       return { ...params, id: 'promo_test' }
     }
     assert.equal((await resolvePublicPromotionCode(stripe, 'sk_test_offline_fixture')).id, 'promo_test')
+  })
+})
+
+
+describe('percentage offer price and Stripe-calculated totals', () => {
+  const { offerPriceProblem, assertOfferSession } = require('../../netlify/lib/intro-discount.cjs')
+  const price = { id: 'price_pro', active: true, unit_amount: 499, currency: 'usd', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' }, billing_scheme: 'per_unit', product: 'prod_pro' }
+  const percentage = { id: 'coupon_percent', valid: true, duration: 'once', percent_off: 20, amount_off: null, currency: null, applies_to: { products: ['prod_pro'] } }
+  function session() {
+    return { mode: 'subscription', status: 'open', currency: 'usd', amount_subtotal: 499, amount_total: 399, url: 'https://checkout.stripe.test/session', discounts: [{ promotion_code: 'promo_existing' }], total_details: { amount_discount: 100, amount_tax: 0, amount_shipping: 0 }, line_items: { has_more: false, data: [{ quantity: 1, price: { id: 'price_pro' }, currency: 'usd', amount_subtotal: 499, amount_discount: 100, amount_tax: 0, amount_total: 399 }] } }
+  }
+  it('accepts only 20% once against the exact eligible annual USD product', () => {
+    assert.equal(offerPriceProblem(price), null)
+    assert.equal(assertIntroCoupon(percentage, price), null)
+    assert.equal(assertIntroCoupon({ ...percentage, percent_off: null, amount_off: 100, currency: 'usd' }, price), null)
+    for (const patch of [{ percent_off: 19 }, { percent_off: 25 }, { duration: 'forever' }, { duration: 'repeating' }, { valid: false }, { applies_to: { products: ['prod_other'] } }, { currency: 'eur' }, { amount_off: 100 }]) {
+      assert.ok(assertIntroCoupon({ ...percentage, ...patch }, price))
+    }
+    assert.ok(assertIntroCoupon(percentage))
+    for (const patch of [{ unit_amount: 500 }, { currency: 'eur' }, { active: false }, { recurring: { interval: 'month' } }, { recurring: { interval: 'year', interval_count: 2, usage_type: 'licensed' } }, { transform_quantity: { divide_by: 2 } }, { billing_scheme: 'tiered' }]) {
+      assert.ok(offerPriceProblem({ ...price, ...patch }))
+      assert.ok(assertIntroCoupon(percentage, { ...price, ...patch }))
+    }
+  })
+  it('accepts Stripe-reported 100-cent rounding, not locally computed percentage arithmetic', () => {
+    assert.doesNotThrow(() => assertOfferSession(session(), 'price_pro', 'promo_existing'))
+    const taxed = session(); taxed.total_details.amount_tax = 32; taxed.amount_total = 431
+    taxed.line_items.data[0].amount_tax = 32; taxed.line_items.data[0].amount_total = 431
+    assert.doesNotThrow(() => assertOfferSession(taxed, 'price_pro', 'promo_existing'))
+  })
+  it('rejects wrong rounding, totals, quantity, price, currency, extra discounts and missing evidence', () => {
+    const edits = [s => s.total_details.amount_discount = 99, s => s.amount_total = 400, s => s.currency = 'eur', s => s.amount_subtotal = 500, s => s.line_items.data[0].quantity = 2, s => s.line_items.data[0].price.id = 'price_other', s => s.discounts.push({ promotion_code: 'promo_other' }), s => s.discounts[0].promotion_code = 'promo_other', s => delete s.total_details, s => delete s.line_items, s => s.line_items.has_more = true]
+    for (const edit of edits) { const s = session(); edit(s); assert.throws(() => assertOfferSession(s, 'price_pro', 'promo_existing'), { code: 'intro-coupon-not-configured' }) }
   })
 })
